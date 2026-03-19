@@ -9,6 +9,9 @@ out/
 build/
 dist/
 
+# cursor
+.cursor/
+
 # Environment files
 .env
 .env.local
