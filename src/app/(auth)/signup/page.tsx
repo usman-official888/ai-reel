@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, Mail, Lock, User, Loader2, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui'
-import { createBrowserSupabaseClient } from '@/lib/supabase'
+import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 
 export default function SignupPage() {
   const router = useRouter()
