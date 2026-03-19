@@ -34,10 +34,12 @@ export interface Database {
           avatar_url: string | null
           subscription_tier: SubscriptionTier
           credits_balance: number
+          credits_used_this_month: number
           stripe_customer_id: string | null
           crypto_wallet_address: string | null
-          subscription_start: string | null
-          subscription_end: string | null
+          subscription_start_date: string | null
+          subscription_end_date: string | null
+          email_verified: boolean
           created_at: string
           updated_at: string
         }
@@ -48,10 +50,12 @@ export interface Database {
           avatar_url?: string | null
           subscription_tier?: SubscriptionTier
           credits_balance?: number
+          credits_used_this_month?: number
           stripe_customer_id?: string | null
           crypto_wallet_address?: string | null
-          subscription_start?: string | null
-          subscription_end?: string | null
+          subscription_start_date?: string | null
+          subscription_end_date?: string | null
+          email_verified?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -62,10 +66,12 @@ export interface Database {
           avatar_url?: string | null
           subscription_tier?: SubscriptionTier
           credits_balance?: number
+          credits_used_this_month?: number
           stripe_customer_id?: string | null
           crypto_wallet_address?: string | null
-          subscription_start?: string | null
-          subscription_end?: string | null
+          subscription_start_date?: string | null
+          subscription_end_date?: string | null
+          email_verified?: boolean
           updated_at?: string
         }
       }
