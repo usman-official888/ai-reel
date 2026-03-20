@@ -1,0 +1,1047 @@
+openapi: 3.0.3
+info:
+  title: VideoForge AI API
+  description: |
+    Complete API for VideoForge AI - Automated Video Generation Platform
+    
+    ## Authentication
+    All endpoints (except /api/health) require authentication via Supabase JWT token.
+    Include the token in the Authorization header: `Bearer <token>`
+    
+    ## Rate Limits
+    - Free tier: 10 requests/minute
+    - Starter: 30 requests/minute
+    - Pro: 100 requests/minute
+    - Business: 300 requests/minute
+    
+    ## Video Generation Pipeline
+    1. Create a project with topic and settings
+    2. Call POST /api/projects/{id}/generate to start pipeline
+    3. Poll GET /api/projects/{id}/generate for status
+    4. Once complete, publish via POST /api/projects/{id}/publish
+  version: 1.0.0
+  contact:
+    name: VideoForge AI Support
+    email: support@videoforge.ai
+  license:
+    name: Proprietary
+    
+servers:
+  - url: http://localhost:3000
+    description: Local development
+  - url: https://api.videoforge.ai
+    description: Production
+
+tags:
+  - name: Health
+    description: API health check
+  - name: Authentication
+    description: Auth endpoints
+  - name: User
+    description: User profile and credits
+  - name: Projects
+    description: Video project management
+  - name: Jobs
+    description: Background job tracking
+  - name: Social
+    description: Social media account connections
+  - name: Webhooks
+    description: External service webhooks
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase JWT token
+      
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: "Error message"
+          
+    Success:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "user_abc123"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        full_name:
+          type: string
+          example: "John Doe"
+        avatar_url:
+          type: string
+          format: uri
+          example: "https://example.com/avatar.jpg"
+        subscription_tier:
+          type: string
+          enum: [free, starter, pro, business, enterprise]
+          example: "pro"
+        credits_balance:
+          type: integer
+          example: 100
+        credits_used_this_month:
+          type: integer
+          example: 25
+        preferences:
+          type: object
+          properties:
+            theme:
+              type: string
+              enum: [light, dark]
+            notifications:
+              type: boolean
+            defaultStyle:
+              type: string
+            defaultVoice:
+              type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "proj_abc123"
+        user_id:
+          type: string
+        title:
+          type: string
+          example: "How AI is Transforming Healthcare"
+        topic:
+          type: string
+          example: "Artificial Intelligence applications in modern healthcare"
+        status:
+          type: string
+          enum: [draft, processing, completed, failed, published]
+          example: "completed"
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 100
+        style:
+          type: string
+          enum: [documentary, tutorial, story, review, explainer]
+          example: "documentary"
+        duration_target:
+          type: integer
+          description: Target duration in seconds
+          example: 60
+        voice_style:
+          type: string
+          enum: [professional, casual, energetic, calm]
+          example: "professional"
+        voice_gender:
+          type: string
+          enum: [male, female]
+          example: "male"
+        aspect_ratio:
+          type: string
+          enum: ["16:9", "9:16", "1:1", "4:5"]
+          example: "9:16"
+        script_data:
+          type: object
+          description: Generated script content
+        video_url:
+          type: string
+          format: uri
+          description: URL of completed video
+        thumbnail_url:
+          type: string
+          format: uri
+        cost_credits:
+          type: integer
+          example: 5
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          
+    ProjectCreate:
+      type: object
+      required:
+        - title
+        - topic
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 100
+          example: "How AI is Transforming Healthcare"
+        topic:
+          type: string
+          minLength: 10
+          maxLength: 1000
+          example: "Artificial Intelligence applications in modern healthcare"
+        style:
+          type: string
+          enum: [documentary, tutorial, story, review, explainer]
+          default: "documentary"
+        duration_target:
+          type: integer
+          minimum: 15
+          maximum: 180
+          default: 60
+        voice_style:
+          type: string
+          enum: [professional, casual, energetic, calm]
+          default: "professional"
+        voice_gender:
+          type: string
+          enum: [male, female]
+          default: "male"
+        aspect_ratio:
+          type: string
+          enum: ["16:9", "9:16", "1:1", "4:5"]
+          default: "9:16"
+          
+    Job:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "job_abc123"
+        project_id:
+          type: string
+        user_id:
+          type: string
+        job_type:
+          type: string
+          enum: [script_generation, image_generation, video_generation, voice_generation, video_composition, publishing]
+        status:
+          type: string
+          enum: [pending, queued, running, completed, failed]
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        error_message:
+          type: string
+        input_data:
+          type: object
+        output_data:
+          type: object
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+          
+    SocialAccount:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "social_abc123"
+        platform:
+          type: string
+          enum: [youtube, tiktok, instagram, twitter, facebook]
+        account_handle:
+          type: string
+          example: "@myhandle"
+        account_name:
+          type: string
+          example: "My Channel"
+        profile_image_url:
+          type: string
+          format: uri
+        is_active:
+          type: boolean
+        token_expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+          
+    Publication:
+      type: object
+      properties:
+        id:
+          type: string
+        platform:
+          type: string
+          enum: [youtube, tiktok, instagram, twitter, facebook]
+        status:
+          type: string
+          enum: [pending, scheduled, publishing, published, failed]
+        caption:
+          type: string
+        hashtags:
+          type: array
+          items:
+            type: string
+        published_url:
+          type: string
+          format: uri
+        scheduled_at:
+          type: string
+          format: date-time
+        published_at:
+          type: string
+          format: date-time
+        views_count:
+          type: integer
+        likes_count:
+          type: integer
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Check API health status and service connectivity
+      security: []
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: "healthy"
+                      timestamp:
+                        type: string
+                        format: date-time
+                      services:
+                        type: object
+                        properties:
+                          database:
+                            type: string
+                            example: "connected"
+                          redis:
+                            type: string
+                            example: "connected"
+                          ai_providers:
+                            type: string
+                            example: "configured"
+
+  /api/auth/callback:
+    get:
+      tags:
+        - Authentication
+      summary: OAuth callback
+      description: Handle OAuth callback from Supabase authentication
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Authorization code from OAuth provider
+      responses:
+        '302':
+          description: Redirect to dashboard on success
+        '400':
+          description: Invalid or missing code
+
+  /api/user:
+    get:
+      tags:
+        - User
+      summary: Get current user
+      description: Get current authenticated user's profile
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+                
+    put:
+      tags:
+        - User
+      summary: Update user profile
+      description: Update current user's profile information
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                full_name:
+                  type: string
+                avatar_url:
+                  type: string
+                  format: uri
+                preferences:
+                  type: object
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+
+  /api/user/credits:
+    get:
+      tags:
+        - User
+      summary: Get credit balance
+      description: Get user's credit balance and usage information
+      responses:
+        '200':
+          description: Credit information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      balance:
+                        type: integer
+                        example: 100
+                      usedThisMonth:
+                        type: integer
+                        example: 25
+                      monthlyLimit:
+                        type: integer
+                        example: 100
+                      subscriptionTier:
+                        type: string
+                        example: "pro"
+                        
+    post:
+      tags:
+        - User
+      summary: Add credits
+      description: Add credits after successful payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - amount
+                - paymentMethod
+                - paymentId
+              properties:
+                amount:
+                  type: integer
+                  minimum: 1
+                  example: 100
+                paymentMethod:
+                  type: string
+                  enum: [stripe, crypto]
+                paymentId:
+                  type: string
+      responses:
+        '200':
+          description: Credits added
+        '400':
+          description: Invalid request
+
+  /api/projects:
+    get:
+      tags:
+        - Projects
+      summary: List projects
+      description: Get paginated list of user's projects
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [all, draft, processing, completed, failed, published]
+            default: all
+      responses:
+        '200':
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      projects:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Project'
+                      pagination:
+                        type: object
+                        properties:
+                          page:
+                            type: integer
+                          limit:
+                            type: integer
+                          total:
+                            type: integer
+                          totalPages:
+                            type: integer
+                            
+    post:
+      tags:
+        - Projects
+      summary: Create project
+      description: Create a new video project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCreate'
+      responses:
+        '201':
+          description: Project created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Project'
+        '400':
+          description: Validation error
+        '402':
+          description: Insufficient credits
+
+  /api/projects/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Project ID
+        
+    get:
+      tags:
+        - Projects
+      summary: Get project
+      description: Get detailed information about a project
+      responses:
+        '200':
+          description: Project details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Project'
+        '404':
+          description: Project not found
+          
+    put:
+      tags:
+        - Projects
+      summary: Update project
+      description: Update project details (only for draft projects)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCreate'
+      responses:
+        '200':
+          description: Project updated
+        '400':
+          description: Cannot update non-draft project
+        '404':
+          description: Project not found
+          
+    delete:
+      tags:
+        - Projects
+      summary: Delete project
+      description: Delete a project and all associated data
+      responses:
+        '200':
+          description: Project deleted
+        '404':
+          description: Project not found
+
+  /api/projects/{id}/generate:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          
+    post:
+      tags:
+        - Projects
+      summary: Start generation
+      description: Start the AI video generation pipeline
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                priority:
+                  type: string
+                  enum: [low, normal, high]
+                  default: normal
+      responses:
+        '200':
+          description: Generation started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      projectId:
+                        type: string
+                      status:
+                        type: string
+                      jobs:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Job'
+        '402':
+          description: Insufficient credits
+        '409':
+          description: Generation already in progress
+          
+    get:
+      tags:
+        - Projects
+      summary: Get generation status
+      description: Get current status of the generation pipeline
+      responses:
+        '200':
+          description: Generation status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        enum: [idle, processing, completed, failed]
+                      progress:
+                        type: integer
+                      currentStep:
+                        type: string
+                      jobs:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Job'
+
+  /api/projects/{id}/publish:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          
+    post:
+      tags:
+        - Projects
+      summary: Publish video
+      description: Publish completed video to social media platforms
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - platforms
+              properties:
+                platforms:
+                  type: array
+                  items:
+                    type: string
+                    enum: [youtube, tiktok, instagram, twitter, facebook]
+                  minItems: 1
+                caption:
+                  type: string
+                  maxLength: 2200
+                hashtags:
+                  type: array
+                  items:
+                    type: string
+                  maxItems: 30
+                scheduledAt:
+                  type: string
+                  format: date-time
+                  description: Optional scheduled publish time
+      responses:
+        '200':
+          description: Publishing initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      publications:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Publication'
+        '400':
+          description: Video not ready or platform not connected
+          
+    get:
+      tags:
+        - Projects
+      summary: Get publication status
+      description: Get status of publications for this project
+      responses:
+        '200':
+          description: Publication status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      publications:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Publication'
+
+  /api/jobs:
+    get:
+      tags:
+        - Jobs
+      summary: List jobs
+      description: Get list of all jobs for the authenticated user
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [all, queued, running, completed, failed]
+            default: all
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: List of jobs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      jobs:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Job'
+
+  /api/jobs/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          
+    get:
+      tags:
+        - Jobs
+      summary: Get job details
+      description: Get detailed information about a specific job
+      responses:
+        '200':
+          description: Job details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Job'
+        '404':
+          description: Job not found
+          
+    delete:
+      tags:
+        - Jobs
+      summary: Cancel job
+      description: Cancel a queued or running job
+      responses:
+        '200':
+          description: Job cancelled
+        '400':
+          description: Job cannot be cancelled
+        '404':
+          description: Job not found
+
+  /api/social:
+    get:
+      tags:
+        - Social
+      summary: List connected accounts
+      description: Get all connected social media accounts
+      responses:
+        '200':
+          description: Connected accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      accounts:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SocialAccount'
+                          
+    post:
+      tags:
+        - Social
+      summary: Connect account
+      description: Connect a new social media account via OAuth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - platform
+                - authCode
+              properties:
+                platform:
+                  type: string
+                  enum: [youtube, tiktok, instagram, twitter, facebook]
+                authCode:
+                  type: string
+                  description: OAuth authorization code
+                redirectUri:
+                  type: string
+                  format: uri
+      responses:
+        '200':
+          description: Account connected
+        '400':
+          description: Invalid auth code or platform
+
+  /api/social/{platform}:
+    parameters:
+      - name: platform
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [youtube, tiktok, instagram, twitter, facebook]
+          
+    get:
+      tags:
+        - Social
+      summary: Get platform account
+      description: Get details of a specific platform connection
+      responses:
+        '200':
+          description: Account details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/SocialAccount'
+        '404':
+          description: Platform not connected
+          
+    put:
+      tags:
+        - Social
+      summary: Refresh tokens
+      description: Refresh OAuth tokens for a platform
+      responses:
+        '200':
+          description: Tokens refreshed
+        '400':
+          description: Failed to refresh
+          
+    delete:
+      tags:
+        - Social
+      summary: Disconnect platform
+      description: Disconnect a social media account
+      responses:
+        '200':
+          description: Account disconnected
+        '404':
+          description: Platform not connected
+
+  /api/webhooks/stripe:
+    post:
+      tags:
+        - Webhooks
+      summary: Stripe webhook
+      description: Handle Stripe payment events
+      security: []
+      parameters:
+        - name: stripe-signature
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Webhook processed
+        '400':
+          description: Invalid signature
+
+  /api/webhooks/ai:
+    post:
+      tags:
+        - Webhooks
+      summary: AI provider webhook
+      description: Handle AI provider callbacks
+      security: []
+      parameters:
+        - name: x-webhook-secret
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                provider:
+                  type: string
+                  enum: [groq, fal, fish]
+                event:
+                  type: string
+                jobId:
+                  type: string
+                result:
+                  type: object
+      responses:
+        '200':
+          description: Webhook processed
+        '400':
+          description: Invalid request
