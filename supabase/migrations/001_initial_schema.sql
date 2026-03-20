@@ -86,7 +86,7 @@ CREATE TABLE public.jobs (
     project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     
-    type job_type NOT NULL,
+    job_type job_type NOT NULL,
     status job_status DEFAULT 'pending',
     progress INTEGER DEFAULT 0,
     priority INTEGER DEFAULT 0,
@@ -107,7 +107,8 @@ CREATE TABLE public.jobs (
     -- Timestamps
     started_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- =============================================
@@ -144,32 +145,36 @@ CREATE TABLE public.social_accounts (
 CREATE TABLE public.publications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
-    social_account_id UUID NOT NULL REFERENCES public.social_accounts(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     
     platform social_platform NOT NULL,
     status publication_status DEFAULT 'pending',
     
     -- Content
-    title TEXT NOT NULL,
-    description TEXT,
+    caption TEXT,
     hashtags TEXT[],
     
     -- Platform details
-    platform_post_id TEXT,
-    platform_post_url TEXT,
+    published_url TEXT,
     
     -- Scheduling
     scheduled_at TIMESTAMPTZ,
     published_at TIMESTAMPTZ,
     
-    -- Analytics (updated periodically)
-    analytics JSONB DEFAULT '{"views": 0, "likes": 0, "comments": 0, "shares": 0}',
+    -- Analytics (individual columns for easier querying)
+    views_count INTEGER DEFAULT 0,
+    likes_count INTEGER DEFAULT 0,
+    comments_count INTEGER DEFAULT 0,
+    shares_count INTEGER DEFAULT 0,
     
     -- Error handling
     error_message TEXT,
     
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    -- Metadata
+    metadata JSONB,
+    
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- =============================================

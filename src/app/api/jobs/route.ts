@@ -4,25 +4,9 @@ import {
   errorResponse,
   getPaginationParams,
 } from '@/lib/api-utils'
-
-// In-memory job store (replace with database)
-const jobs = new Map<string, Job>()
-
-interface Job {
-  id: string
-  projectId: string
-  userId: string
-  type: 'script' | 'image' | 'video' | 'voice' | 'assembly'
-  status: 'pending' | 'queued' | 'running' | 'completed' | 'failed'
-  progress: number
-  result?: unknown
-  error?: string
-  retryCount: number
-  priority: number
-  startedAt?: string
-  completedAt?: string
-  createdAt: string
-}
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getUserJobs } from '@/lib/db'
+import type { JobStatus, JobType } from '@/types/database'
 
 /**
  * GET /api/jobs
@@ -34,40 +18,29 @@ export async function GET(request: NextRequest) {
     const { page, limit, offset } = getPaginationParams(searchParams)
     
     // Filter params
-    const projectId = searchParams.get('projectId')
-    const status = searchParams.get('status')
-    const type = searchParams.get('type')
+    const projectId = searchParams.get('projectId') || undefined
+    const status = searchParams.get('status') as JobStatus | undefined
+    const type = searchParams.get('type') as JobType | undefined
 
-    // Get user ID from auth (placeholder)
-    const userId = 'user-1' // TODO: Get from auth session
+    // Get authenticated user
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    // Filter jobs
-    let userJobs = Array.from(jobs.values())
-      .filter((j) => j.userId === userId)
-
-    if (projectId) {
-      userJobs = userJobs.filter((j) => j.projectId === projectId)
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 401)
     }
 
-    if (status) {
-      userJobs = userJobs.filter((j) => j.status === status)
-    }
-
-    if (type) {
-      userJobs = userJobs.filter((j) => j.type === type)
-    }
-
-    // Sort by creation date (newest first)
-    userJobs.sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )
-
-    // Paginate
-    const total = userJobs.length
-    const paginatedJobs = userJobs.slice(offset, offset + limit)
+    // Get jobs from database
+    const { jobs, total } = await getUserJobs(user.id, {
+      projectId,
+      status,
+      type,
+      limit,
+      offset,
+    })
 
     return successResponse({
-      jobs: paginatedJobs,
+      jobs,
       pagination: {
         page,
         limit,

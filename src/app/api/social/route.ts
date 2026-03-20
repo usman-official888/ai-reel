@@ -2,46 +2,14 @@ import { NextRequest } from 'next/server'
 import {
   successResponse,
   errorResponse,
+  parseBody,
   generateId,
 } from '@/lib/api-utils'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getUserSocialAccounts, isTokenExpired } from '@/lib/db'
+import type { SocialPlatform } from '@/types/database'
 
-// In-memory store (replace with database)
-const socialAccounts = new Map<string, SocialAccount>()
-
-// Initialize with demo accounts
-socialAccounts.set('social-1', {
-  id: 'social-1',
-  userId: 'user-1',
-  platform: 'youtube',
-  accountHandle: '@VideoForgeDemo',
-  accountName: 'VideoForge Demo Channel',
-  isActive: true,
-  tokenExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-  connectedAt: '2024-02-01T10:00:00Z',
-})
-
-socialAccounts.set('social-2', {
-  id: 'social-2',
-  userId: 'user-1',
-  platform: 'tiktok',
-  accountHandle: '@videoforge_ai',
-  accountName: 'VideoForge AI',
-  isActive: true,
-  tokenExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-  connectedAt: '2024-02-15T14:00:00Z',
-})
-
-interface SocialAccount {
-  id: string
-  userId: string
-  platform: 'youtube' | 'tiktok' | 'instagram' | 'twitter'
-  accountHandle: string
-  accountName: string
-  profileImageUrl?: string
-  isActive: boolean
-  tokenExpiresAt: string
-  connectedAt: string
-}
+const VALID_PLATFORMS: SocialPlatform[] = ['youtube', 'tiktok', 'instagram', 'twitter']
 
 /**
  * GET /api/social
@@ -49,18 +17,30 @@ interface SocialAccount {
  */
 export async function GET(request: NextRequest) {
   try {
-    // Get user ID from auth (placeholder)
-    const userId = 'user-1' // TODO: Get from auth session
+    // Get authenticated user
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    const userAccounts = Array.from(socialAccounts.values())
-      .filter((a) => a.userId === userId)
-      .map((account) => ({
-        ...account,
-        // Check if token is expired
-        isExpired: new Date(account.tokenExpiresAt) < new Date(),
-      }))
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 401)
+    }
 
-    return successResponse({ accounts: userAccounts })
+    const accounts = await getUserSocialAccounts(user.id)
+
+    // Add isExpired flag and remove sensitive tokens from response
+    const safeAccounts = accounts.map((account) => ({
+      id: account.id,
+      platform: account.platform,
+      accountHandle: account.account_handle,
+      accountName: account.account_name,
+      profileImageUrl: account.profile_image_url,
+      isActive: account.is_active,
+      isExpired: isTokenExpired(account.token_expires_at),
+      tokenExpiresAt: account.token_expires_at,
+      connectedAt: account.created_at,
+    }))
+
+    return successResponse({ accounts: safeAccounts })
   } catch (error) {
     console.error('Error listing social accounts:', error)
     return errorResponse('Failed to list social accounts', 500)
@@ -73,31 +53,39 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { platform, redirectUrl } = body
+    const body = await parseBody<{
+      platform: SocialPlatform
+      redirectUrl?: string
+    }>(request)
 
-    if (!platform) {
+    if (!body || !body.platform) {
       return errorResponse('Missing required field: platform')
     }
 
-    const validPlatforms = ['youtube', 'tiktok', 'instagram', 'twitter']
-    if (!validPlatforms.includes(platform)) {
-      return errorResponse(`Invalid platform. Must be one of: ${validPlatforms.join(', ')}`)
+    const { platform, redirectUrl } = body
+
+    if (!VALID_PLATFORMS.includes(platform)) {
+      return errorResponse(`Invalid platform. Must be one of: ${VALID_PLATFORMS.join(', ')}`)
     }
 
-    // Get user ID from auth (placeholder)
-    const userId = 'user-1' // TODO: Get from auth session
+    // Get authenticated user
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 401)
+    }
 
     // Check if already connected
-    const existingAccount = Array.from(socialAccounts.values())
-      .find((a) => a.userId === userId && a.platform === platform)
+    const accounts = await getUserSocialAccounts(user.id)
+    const existingAccount = accounts.find((a) => a.platform === platform)
 
-    if (existingAccount) {
+    if (existingAccount && existingAccount.is_active) {
       return errorResponse(`${platform} account already connected`, 400)
     }
 
     // Generate OAuth URL based on platform
-    const oauthUrls: Record<string, string> = {
+    const oauthUrls: Record<SocialPlatform, string> = {
       youtube: 'https://accounts.google.com/o/oauth2/v2/auth',
       tiktok: 'https://www.tiktok.com/v2/auth/authorize/',
       instagram: 'https://api.instagram.com/oauth/authorize',
@@ -105,13 +93,15 @@ export async function POST(request: NextRequest) {
     }
 
     // In production, this would generate proper OAuth URLs with:
-    // - client_id
-    // - redirect_uri
-    // - scope
-    // - state (for CSRF protection)
+    // - client_id from env vars
+    // - redirect_uri to callback endpoint
+    // - scope for required permissions
+    // - state for CSRF protection
 
     const state = generateId('oauth')
-    const oauthUrl = `${oauthUrls[platform]}?client_id=YOUR_CLIENT_ID&redirect_uri=${encodeURIComponent(redirectUrl || '/api/social/callback')}&state=${state}&platform=${platform}`
+    const callbackUrl = redirectUrl || `${process.env.NEXT_PUBLIC_APP_URL || ''}/api/social/callback`
+    
+    const oauthUrl = `${oauthUrls[platform]}?client_id=YOUR_CLIENT_ID&redirect_uri=${encodeURIComponent(callbackUrl)}&state=${state}&platform=${platform}`
 
     return successResponse({
       oauthUrl,

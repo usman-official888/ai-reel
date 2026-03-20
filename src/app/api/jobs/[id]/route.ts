@@ -3,28 +3,11 @@ import {
   successResponse,
   errorResponse,
 } from '@/lib/api-utils'
-
-// In-memory job store (replace with database)
-const jobs = new Map<string, Job>()
-
-interface Job {
-  id: string
-  projectId: string
-  userId: string
-  type: 'script' | 'image' | 'video' | 'voice' | 'assembly'
-  status: 'pending' | 'queued' | 'running' | 'completed' | 'failed'
-  progress: number
-  result?: unknown
-  error?: string
-  retryCount: number
-  priority: number
-  startedAt?: string
-  completedAt?: string
-  createdAt: string
-}
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getJob, updateJobProgress } from '@/lib/db'
 
 interface RouteParams {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 /**
@@ -36,19 +19,24 @@ export async function GET(
   { params }: RouteParams
 ) {
   try {
-    const { id } = params
+    const { id } = await params
     
-    // Get user ID from auth (placeholder)
-    const userId = 'user-1' // TODO: Get from auth session
+    // Get authenticated user
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    const job = jobs.get(id)
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 401)
+    }
+
+    const job = await getJob(id)
 
     if (!job) {
       return errorResponse('Job not found', 404)
     }
 
-    // Verify ownership
-    if (job.userId !== userId) {
+    // Verify ownership via user_id
+    if (job.user_id !== user.id) {
       return errorResponse('Access denied', 403)
     }
 
@@ -68,19 +56,24 @@ export async function DELETE(
   { params }: RouteParams
 ) {
   try {
-    const { id } = params
+    const { id } = await params
     
-    // Get user ID from auth (placeholder)
-    const userId = 'user-1' // TODO: Get from auth session
+    // Get authenticated user
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    const job = jobs.get(id)
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 401)
+    }
+
+    const job = await getJob(id)
 
     if (!job) {
       return errorResponse('Job not found', 404)
     }
 
     // Verify ownership
-    if (job.userId !== userId) {
+    if (job.user_id !== user.id) {
       return errorResponse('Access denied', 403)
     }
 
@@ -89,13 +82,14 @@ export async function DELETE(
       return errorResponse(`Cannot cancel job with status: ${job.status}`, 400)
     }
 
-    // Update job status
-    job.status = 'failed'
-    job.error = 'Cancelled by user'
-    job.completedAt = new Date().toISOString()
-    jobs.set(id, job)
+    // Update job status to failed with cancel message
+    await updateJobProgress(id, 'failed', 0, {
+      error_message: 'Cancelled by user',
+    })
 
-    return successResponse({ cancelled: true, job })
+    const updatedJob = await getJob(id)
+
+    return successResponse({ cancelled: true, job: updatedJob })
   } catch (error) {
     console.error('Error cancelling job:', error)
     return errorResponse('Failed to cancel job', 500)

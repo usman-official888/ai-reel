@@ -4,36 +4,8 @@ import {
   errorResponse,
   parseBody,
 } from '@/lib/api-utils'
-
-// In-memory user store (replace with Supabase)
-const users = new Map<string, User>()
-
-// Initialize with demo user
-users.set('user-1', {
-  id: 'user-1',
-  email: 'demo@videoforge.ai',
-  fullName: 'Demo User',
-  avatarUrl: null,
-  subscriptionTier: 'pro',
-  creditsBalance: 87,
-  creditsUsedThisMonth: 13,
-  stripeCustomerId: null,
-  createdAt: '2024-01-15T10:00:00Z',
-  updatedAt: new Date().toISOString(),
-})
-
-interface User {
-  id: string
-  email: string
-  fullName: string
-  avatarUrl: string | null
-  subscriptionTier: 'free' | 'starter' | 'pro' | 'business' | 'enterprise'
-  creditsBalance: number
-  creditsUsedThisMonth: number
-  stripeCustomerId: string | null
-  createdAt: string
-  updatedAt: string
-}
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getUser, updateUser } from '@/lib/db'
 
 /**
  * GET /api/user
@@ -41,17 +13,23 @@ interface User {
  */
 export async function GET(request: NextRequest) {
   try {
-    // Get user ID from auth (placeholder)
-    const userId = 'user-1' // TODO: Get from auth session
+    // Get authenticated user
+    const supabase = await createServerSupabaseClient()
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
 
-    const user = users.get(userId)
+    if (authError || !authUser) {
+      return errorResponse('Unauthorized', 401)
+    }
+
+    // Get user profile from database
+    const user = await getUser(authUser.id)
 
     if (!user) {
-      return errorResponse('User not found', 404)
+      return errorResponse('User profile not found', 404)
     }
 
     // Don't expose sensitive fields
-    const { stripeCustomerId, ...safeUser } = user
+    const { stripe_customer_id, ...safeUser } = user
 
     return successResponse(safeUser)
   } catch (error) {
@@ -66,42 +44,42 @@ export async function GET(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const body = await parseBody<Partial<User>>(request)
+    const body = await parseBody<Record<string, unknown>>(request)
 
     if (!body) {
       return errorResponse('Invalid request body')
     }
 
-    // Get user ID from auth (placeholder)
-    const userId = 'user-1' // TODO: Get from auth session
+    // Get authenticated user
+    const supabase = await createServerSupabaseClient()
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
 
-    const user = users.get(userId)
+    if (authError || !authUser) {
+      return errorResponse('Unauthorized', 401)
+    }
 
-    if (!user) {
-      return errorResponse('User not found', 404)
+    // Get existing user profile
+    const existingUser = await getUser(authUser.id)
+
+    if (!existingUser) {
+      return errorResponse('User profile not found', 404)
     }
 
     // Only allow updating certain fields
-    const allowedFields = ['fullName', 'avatarUrl']
-    const updates: Partial<User> = {}
+    const allowedFields = ['full_name', 'avatar_url']
+    const updates: Record<string, unknown> = {}
     
     for (const field of allowedFields) {
-      if (body[field as keyof User] !== undefined) {
-        (updates as Record<string, unknown>)[field] = body[field as keyof User]
+      if (body[field] !== undefined) {
+        updates[field] = body[field]
       }
     }
 
     // Update user
-    const updatedUser: User = {
-      ...user,
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    }
-
-    users.set(userId, updatedUser)
+    const updatedUser = await updateUser(authUser.id, updates)
 
     // Don't expose sensitive fields
-    const { stripeCustomerId, ...safeUser } = updatedUser
+    const { stripe_customer_id, ...safeUser } = updatedUser
 
     return successResponse(safeUser)
   } catch (error) {

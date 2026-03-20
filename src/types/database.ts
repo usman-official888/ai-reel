@@ -16,12 +16,12 @@ export type Json =
 
 export type ProjectStatus = 'draft' | 'processing' | 'completed' | 'failed'
 export type JobType = 'script' | 'image' | 'video' | 'voice' | 'assembly'
-export type JobStatus = 'queued' | 'running' | 'completed' | 'failed'
+export type JobStatus = 'pending' | 'queued' | 'running' | 'completed' | 'failed'
 export type SubscriptionTier = 'free' | 'starter' | 'pro' | 'business' | 'enterprise'
 export type SocialPlatform = 'youtube' | 'tiktok' | 'instagram' | 'twitter'
-export type PublicationStatus = 'scheduled' | 'publishing' | 'published' | 'failed'
-export type TransactionType = 'subscription' | 'credits' | 'refund'
-export type PaymentMethod = 'stripe' | 'crypto' | 'credits'
+export type PublicationStatus = 'pending' | 'scheduled' | 'publishing' | 'published' | 'failed'
+export type TransactionType = 'subscription' | 'purchase' | 'usage' | 'refund'
+export type PaymentMethod = 'stripe' | 'crypto' | 'free'
 
 export interface Database {
   public: {
@@ -83,7 +83,11 @@ export interface Database {
           topic: string
           status: ProjectStatus
           progress: number
-          settings: Json
+          style: string
+          duration_target: number
+          voice_style: string
+          voice_gender: string
+          aspect_ratio: string
           script: Json | null
           scenes: Json | null
           output_url: string | null
@@ -100,7 +104,11 @@ export interface Database {
           topic: string
           status?: ProjectStatus
           progress?: number
-          settings: Json
+          style?: string
+          duration_target?: number
+          voice_style?: string
+          voice_gender?: string
+          aspect_ratio?: string
           script?: Json | null
           scenes?: Json | null
           output_url?: string | null
@@ -116,7 +124,11 @@ export interface Database {
           topic?: string
           status?: ProjectStatus
           progress?: number
-          settings?: Json
+          style?: string
+          duration_target?: number
+          voice_style?: string
+          voice_gender?: string
+          aspect_ratio?: string
           script?: Json | null
           scenes?: Json | null
           output_url?: string | null
@@ -130,7 +142,9 @@ export interface Database {
         Row: {
           id: string
           project_id: string
+          user_id: string
           job_type: JobType
+          type?: JobType
           status: JobStatus
           progress: number
           input_data: Json | null
@@ -146,6 +160,7 @@ export interface Database {
         Insert: {
           id?: string
           project_id: string
+          user_id: string
           job_type: JobType
           status?: JobStatus
           progress?: number
@@ -161,6 +176,7 @@ export interface Database {
         }
         Update: {
           project_id?: string
+          user_id?: string
           job_type?: JobType
           status?: JobStatus
           progress?: number
@@ -180,67 +196,94 @@ export interface Database {
           user_id: string
           platform: SocialPlatform
           account_handle: string
-          access_token: string
+          account_name: string | null
+          profile_image_url: string | null
+          access_token: string | null
           refresh_token: string | null
           token_expires_at: string | null
           is_active: boolean
           created_at: string
+          updated_at: string
         }
         Insert: {
           id?: string
           user_id: string
           platform: SocialPlatform
           account_handle: string
-          access_token: string
+          account_name?: string | null
+          profile_image_url?: string | null
+          access_token?: string | null
           refresh_token?: string | null
           token_expires_at?: string | null
           is_active?: boolean
           created_at?: string
+          updated_at?: string
         }
         Update: {
           user_id?: string
           platform?: SocialPlatform
           account_handle?: string
-          access_token?: string
+          account_name?: string | null
+          profile_image_url?: string | null
+          access_token?: string | null
           refresh_token?: string | null
           token_expires_at?: string | null
           is_active?: boolean
+          updated_at?: string
         }
       }
       publications: {
         Row: {
           id: string
           project_id: string
-          social_account_id: string
-          platform_post_id: string | null
-          post_url: string | null
+          user_id: string
+          platform: SocialPlatform
           status: PublicationStatus
+          caption: string | null
+          hashtags: string[] | null
           scheduled_at: string | null
           published_at: string | null
-          analytics: Json | null
+          published_url: string | null
+          error_message: string | null
+          views_count: number
+          likes_count: number
+          metadata: Json | null
           created_at: string
+          updated_at: string
         }
         Insert: {
           id?: string
           project_id: string
-          social_account_id: string
-          platform_post_id?: string | null
-          post_url?: string | null
+          user_id: string
+          platform: SocialPlatform
           status?: PublicationStatus
+          caption?: string | null
+          hashtags?: string[] | null
           scheduled_at?: string | null
           published_at?: string | null
-          analytics?: Json | null
+          published_url?: string | null
+          error_message?: string | null
+          views_count?: number
+          likes_count?: number
+          metadata?: Json | null
           created_at?: string
+          updated_at?: string
         }
         Update: {
           project_id?: string
-          social_account_id?: string
-          platform_post_id?: string | null
-          post_url?: string | null
+          user_id?: string
+          platform?: SocialPlatform
           status?: PublicationStatus
+          caption?: string | null
+          hashtags?: string[] | null
           scheduled_at?: string | null
           published_at?: string | null
-          analytics?: Json | null
+          published_url?: string | null
+          error_message?: string | null
+          views_count?: number
+          likes_count?: number
+          metadata?: Json | null
+          updated_at?: string
         }
       }
       transactions: {
@@ -249,9 +292,9 @@ export interface Database {
           user_id: string
           type: TransactionType
           payment_method: PaymentMethod
-          amount: number
-          currency: string
+          amount_usd: number
           credits_amount: number
+          description: string | null
           status: string
           external_id: string | null
           metadata: Json | null
@@ -262,9 +305,9 @@ export interface Database {
           user_id: string
           type: TransactionType
           payment_method: PaymentMethod
-          amount: number
-          currency?: string
+          amount_usd?: number
           credits_amount?: number
+          description?: string | null
           status?: string
           external_id?: string | null
           metadata?: Json | null
@@ -274,9 +317,9 @@ export interface Database {
           user_id?: string
           type?: TransactionType
           payment_method?: PaymentMethod
-          amount?: number
-          currency?: string
+          amount_usd?: number
           credits_amount?: number
+          description?: string | null
           status?: string
           external_id?: string | null
           metadata?: Json | null

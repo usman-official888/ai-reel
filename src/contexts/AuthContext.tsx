@@ -14,6 +14,7 @@ import type { User, Session } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 
 type UserProfile = Database['public']['Tables']['users']['Row']
+type UserProfileUpdate = Database['public']['Tables']['users']['Update']
 
 interface AuthContextType {
   user: User | null
@@ -24,7 +25,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<{ error: Error | null }>
-  updateProfile: (updates: Partial<UserProfile>) => Promise<{ error: Error | null }>
+  updateProfile: (updates: UserProfileUpdate) => Promise<{ error: Error | null }>
   refreshProfile: () => Promise<void>
 }
 
@@ -197,7 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Update user profile
   const updateProfile = async (
-    updates: Partial<UserProfile>
+    updates: UserProfileUpdate
   ): Promise<{ error: Error | null }> => {
     if (!user) {
       return { error: new Error('Not authenticated') }
@@ -206,7 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { error } = await supabase
         .from('users')
-        .update(updates)
+        .update(updates as never)
         .eq('id', user.id)
 
       if (error) throw error

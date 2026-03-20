@@ -3,7 +3,7 @@
  * Handles all user-related database operations
  */
 
-import { getSupabaseServerClient } from '../supabase'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { 
   User, 
   UserInsert, 
@@ -15,7 +15,7 @@ import {
  * Get user by ID
  */
 export async function getUser(userId: string): Promise<User | null> {
-  const supabase = getSupabaseServerClient()
+  const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
     .from('users')
@@ -37,7 +37,7 @@ export async function getUser(userId: string): Promise<User | null> {
  * Get user by email
  */
 export async function getUserByEmail(email: string): Promise<User | null> {
-  const supabase = getSupabaseServerClient()
+  const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
     .from('users')
@@ -61,11 +61,11 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 export async function upsertUser(
   userData: UserInsert
 ): Promise<User> {
-  const supabase = getSupabaseServerClient()
+  const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
     .from('users')
-    .upsert(userData)
+    .upsert(userData as never)
     .select()
     .single()
 
@@ -73,7 +73,7 @@ export async function upsertUser(
     throw new Error(`Failed to upsert user: ${error.message}`)
   }
 
-  return data
+  return data as User
 }
 
 /**
@@ -83,11 +83,11 @@ export async function updateUser(
   userId: string,
   updates: UserUpdate
 ): Promise<User> {
-  const supabase = getSupabaseServerClient()
+  const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
     .from('users')
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update({ ...updates, updated_at: new Date().toISOString() } as never)
     .eq('id', userId)
     .select()
     .single()
@@ -96,7 +96,7 @@ export async function updateUser(
     throw new Error(`Failed to update user: ${error.message}`)
   }
 
-  return data
+  return data as User
 }
 
 /**
@@ -114,24 +114,12 @@ export async function addCredits(
   userId: string,
   amount: number
 ): Promise<number> {
-  const supabase = getSupabaseServerClient()
-
-  const { data, error } = await supabase.rpc('add_credits', {
-    user_id: userId,
-    credit_amount: amount,
-  })
-
-  if (error) {
-    // Fallback to manual update if RPC doesn't exist
-    const user = await getUser(userId)
-    if (!user) throw new Error('User not found')
-    
-    const newBalance = user.credits_balance + amount
-    await updateUser(userId, { credits_balance: newBalance })
-    return newBalance
-  }
-
-  return data
+  const user = await getUser(userId)
+  if (!user) throw new Error('User not found')
+  
+  const newBalance = user.credits_balance + amount
+  await updateUser(userId, { credits_balance: newBalance })
+  return newBalance
 }
 
 /**
@@ -151,7 +139,11 @@ export async function deductCredits(
   }
 
   const newBalance = user.credits_balance - amount
-  await updateUser(userId, { credits_balance: newBalance })
+  const newUsedThisMonth = (user.credits_used_this_month || 0) + amount
+  await updateUser(userId, { 
+    credits_balance: newBalance,
+    credits_used_this_month: newUsedThisMonth
+  })
   
   return { success: true, newBalance }
 }
@@ -178,7 +170,7 @@ export async function updateSubscription(
 ): Promise<User> {
   const updates: UserUpdate = {
     subscription_tier: tier,
-    subscription_start: new Date().toISOString(),
+    subscription_start_date: new Date().toISOString(),
   }
 
   if (stripeCustomerId) {
@@ -186,7 +178,7 @@ export async function updateSubscription(
   }
 
   if (subscriptionEnd) {
-    updates.subscription_end = subscriptionEnd.toISOString()
+    updates.subscription_end_date = subscriptionEnd.toISOString()
   }
 
   return updateUser(userId, updates)
@@ -196,7 +188,7 @@ export async function updateSubscription(
  * Get subscription tier limits
  */
 export function getSubscriptionLimits(tier: SubscriptionTier): {
-  monthlyVideos: number
+  monthlyCredits: number
   maxDuration: number
   maxResolution: '720p' | '1080p' | '4K'
   priorityProcessing: boolean
@@ -204,35 +196,35 @@ export function getSubscriptionLimits(tier: SubscriptionTier): {
 } {
   const limits: Record<SubscriptionTier, ReturnType<typeof getSubscriptionLimits>> = {
     free: {
-      monthlyVideos: 3,
+      monthlyCredits: 3,
       maxDuration: 60,
       maxResolution: '720p',
       priorityProcessing: false,
       apiAccess: false,
     },
     starter: {
-      monthlyVideos: 30,
+      monthlyCredits: 30,
       maxDuration: 120,
       maxResolution: '1080p',
       priorityProcessing: false,
       apiAccess: false,
     },
     pro: {
-      monthlyVideos: 100,
+      monthlyCredits: 100,
       maxDuration: 180,
       maxResolution: '4K',
       priorityProcessing: true,
       apiAccess: true,
     },
     business: {
-      monthlyVideos: 500,
+      monthlyCredits: 500,
       maxDuration: 300,
       maxResolution: '4K',
       priorityProcessing: true,
       apiAccess: true,
     },
     enterprise: {
-      monthlyVideos: Infinity,
+      monthlyCredits: Infinity,
       maxDuration: 600,
       maxResolution: '4K',
       priorityProcessing: true,

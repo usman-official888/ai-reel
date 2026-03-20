@@ -3,7 +3,7 @@
  * Handles all project-related database operations
  */
 
-import { getSupabaseServerClient } from '../supabase'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { 
   Project, 
   ProjectInsert, 
@@ -37,7 +37,7 @@ export async function listProjects(
   const { userId, status, search, page = 1, limit = 20 } = options
   const offset = (page - 1) * limit
 
-  const supabase = getSupabaseServerClient()
+  const supabase = await createServerSupabaseClient()
 
   // Build query
   let query = supabase
@@ -77,7 +77,7 @@ export async function getProject(
   projectId: string,
   userId: string
 ): Promise<Project | null> {
-  const supabase = getSupabaseServerClient()
+  const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
     .from('projects')
@@ -102,19 +102,19 @@ export async function getProject(
 export async function createProject(
   data: Omit<ProjectInsert, 'id' | 'created_at' | 'updated_at'>
 ): Promise<Project> {
-  const supabase = getSupabaseServerClient()
+  const supabase = await createServerSupabaseClient()
 
-  const project: ProjectInsert = {
+  const project = {
     id: generateId('proj'),
     ...data,
-    status: 'draft',
+    status: 'draft' as const,
     progress: 0,
     cost_credits: 0,
   }
 
   const { data: created, error } = await supabase
     .from('projects')
-    .insert(project)
+    .insert(project as never)
     .select()
     .single()
 
@@ -122,7 +122,7 @@ export async function createProject(
     throw new Error(`Failed to create project: ${error.message}`)
   }
 
-  return created
+  return created as Project
 }
 
 /**
@@ -133,11 +133,11 @@ export async function updateProject(
   userId: string,
   updates: ProjectUpdate
 ): Promise<Project> {
-  const supabase = getSupabaseServerClient()
+  const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
     .from('projects')
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update({ ...updates, updated_at: new Date().toISOString() } as never)
     .eq('id', projectId)
     .eq('user_id', userId)
     .select()
@@ -147,7 +147,7 @@ export async function updateProject(
     throw new Error(`Failed to update project: ${error.message}`)
   }
 
-  return data
+  return data as Project
 }
 
 /**
@@ -157,7 +157,7 @@ export async function deleteProject(
   projectId: string,
   userId: string
 ): Promise<void> {
-  const supabase = getSupabaseServerClient()
+  const supabase = await createServerSupabaseClient()
 
   const { error } = await supabase
     .from('projects')
@@ -179,7 +179,7 @@ export async function updateProjectProgress(
   progress: number,
   additionalUpdates?: Partial<ProjectUpdate>
 ): Promise<void> {
-  const supabase = getSupabaseServerClient()
+  const supabase = await createServerSupabaseClient()
 
   const { error } = await supabase
     .from('projects')
@@ -188,7 +188,7 @@ export async function updateProjectProgress(
       progress,
       ...additionalUpdates,
       updated_at: new Date().toISOString(),
-    })
+    } as never)
     .eq('id', projectId)
 
   if (error) {
@@ -203,7 +203,7 @@ export async function getProjectsByStatus(
   status: ProjectStatus,
   limit: number = 10
 ): Promise<Project[]> {
-  const supabase = getSupabaseServerClient()
+  const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
     .from('projects')

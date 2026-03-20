@@ -3,216 +3,211 @@ import {
   successResponse,
   errorResponse,
   parseBody,
-  generateId,
 } from '@/lib/api-utils'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { 
+  getProject, 
+  getSocialAccountByPlatform, 
+  isTokenExpired,
+  createPublication,
+  getProjectPublications,
+} from '@/lib/db'
+import type { SocialPlatform } from '@/types/database'
 
-// Shared stores (would be database in production)
-const projects = new Map<string, Project>()
-const publications = new Map<string, Publication>()
-
-interface Project {
-  id: string
-  userId: string
-  title: string
-  topic: string
-  status: 'draft' | 'processing' | 'completed' | 'failed'
-  outputUrl?: string
-  [key: string]: unknown
-}
-
-interface Publication {
-  id: string
-  projectId: string
-  platform: 'youtube' | 'tiktok' | 'instagram' | 'twitter'
-  status: 'pending' | 'uploading' | 'published' | 'failed'
-  title: string
-  description: string
-  hashtags: string[]
-  scheduledAt?: string
-  publishedAt?: string
-  platformPostId?: string
-  platformPostUrl?: string
-  error?: string
-  createdAt: string
-}
+const VALID_PLATFORMS: SocialPlatform[] = ['youtube', 'tiktok', 'instagram', 'twitter']
 
 interface RouteParams {
-  params: { id: string }
-}
-
-interface PublishRequest {
-  platform: 'youtube' | 'tiktok' | 'instagram' | 'twitter'
-  title: string
-  description: string
-  hashtags?: string[]
-  scheduledAt?: string // ISO date string for scheduled publishing
+  params: Promise<{ id: string }>
 }
 
 /**
  * POST /api/projects/[id]/publish
- * Publish a completed video to a social platform
+ * Publish a completed video to social platforms
  */
 export async function POST(
   request: NextRequest,
   { params }: RouteParams
 ) {
   try {
-    const { id } = params
-    const body = await parseBody<PublishRequest>(request)
+    const { id } = await params
+    const body = await parseBody<{
+      platforms: SocialPlatform[]
+      scheduledAt?: string
+      caption?: string
+      hashtags?: string[]
+    }>(request)
 
-    if (!body) {
-      return errorResponse('Invalid request body')
+    if (!body || !body.platforms || !Array.isArray(body.platforms)) {
+      return errorResponse('Missing required field: platforms (array)')
     }
 
-    const { platform, title, description, hashtags = [], scheduledAt } = body
+    const { platforms, scheduledAt, caption, hashtags } = body
 
-    if (!platform || !title) {
-      return errorResponse('Missing required fields: platform, title')
+    // Validate platforms
+    for (const platform of platforms) {
+      if (!VALID_PLATFORMS.includes(platform)) {
+        return errorResponse(`Invalid platform: ${platform}`)
+      }
     }
 
-    // Validate platform
-    const validPlatforms = ['youtube', 'tiktok', 'instagram', 'twitter']
-    if (!validPlatforms.includes(platform)) {
-      return errorResponse(`Invalid platform. Must be one of: ${validPlatforms.join(', ')}`)
+    // Get authenticated user
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 401)
     }
 
-    // Get user ID from auth (placeholder)
-    const userId = 'user-1' // TODO: Get from auth session
-
-    const project = projects.get(id)
+    // Get project
+    const project = await getProject(id, user.id)
 
     if (!project) {
       return errorResponse('Project not found', 404)
     }
 
-    // Verify ownership
-    if (project.userId !== userId) {
-      return errorResponse('Access denied', 403)
-    }
-
-    // Check if project is completed
+    // Check if video is ready
     if (project.status !== 'completed') {
-      return errorResponse('Project must be completed before publishing', 400)
+      return errorResponse('Video must be completed before publishing', 400)
     }
 
-    // Check if video output exists
-    if (!project.outputUrl) {
+    if (!project.output_url) {
       return errorResponse('No video output available', 400)
     }
 
-    // TODO: Check if user has connected this social platform
-    // const socialAccount = await getSocialAccount(userId, platform)
-    // if (!socialAccount) {
-    //   return errorResponse(`${platform} account not connected`, 400)
-    // }
+    // Check connected accounts for each platform
+    const accountChecks = await Promise.all(
+      platforms.map(async (platform) => {
+        const account = await getSocialAccountByPlatform(user.id, platform)
+        return {
+          platform,
+          connected: !!account,
+          expired: account ? isTokenExpired(account.token_expires_at) : false,
+          accountHandle: account?.account_handle,
+        }
+      })
+    )
 
-    // Create publication record
-    const publication: Publication = {
-      id: generateId('pub'),
-      projectId: id,
-      platform,
-      status: scheduledAt ? 'pending' : 'uploading',
-      title,
-      description,
-      hashtags,
-      scheduledAt,
-      createdAt: new Date().toISOString(),
+    // Check for missing or expired accounts
+    const missing = accountChecks.filter((a) => !a.connected)
+    const expired = accountChecks.filter((a) => a.connected && a.expired)
+
+    if (missing.length > 0) {
+      return errorResponse(
+        `Not connected to: ${missing.map((m) => m.platform).join(', ')}`,
+        400
+      )
     }
 
-    publications.set(publication.id, publication)
-
-    // If not scheduled, start upload immediately
-    if (!scheduledAt) {
-      // In production, this would queue the upload job
-      publishToSocialPlatform(publication, project.outputUrl!)
-        .then((result) => {
-          publication.status = 'published'
-          publication.publishedAt = new Date().toISOString()
-          publication.platformPostId = result.postId
-          publication.platformPostUrl = result.postUrl
-          publications.set(publication.id, publication)
-        })
-        .catch((error) => {
-          publication.status = 'failed'
-          publication.error = error.message
-          publications.set(publication.id, publication)
-        })
+    if (expired.length > 0) {
+      return errorResponse(
+        `Token expired for: ${expired.map((e) => e.platform).join(', ')}. Please reconnect.`,
+        400
+      )
     }
+
+    // Create publication records
+    const publications = await Promise.all(
+      platforms.map(async (platform) => {
+        const account = accountChecks.find((a) => a.platform === platform)
+        
+        const publication = await createPublication({
+          projectId: id,
+          userId: user.id,
+          platform,
+          scheduledAt: scheduledAt || null,
+          caption: caption || project.title,
+          hashtags: hashtags || [],
+          metadata: {
+            accountHandle: account?.accountHandle,
+          },
+        })
+
+        return publication
+      })
+    )
+
+    // TODO: In production, this would:
+    // 1. Queue the actual upload to each platform using their APIs
+    // 2. Update publication status as uploads complete
+    // 3. Store the published video URLs
 
     return successResponse({
-      publication,
-      message: scheduledAt 
-        ? `Video scheduled for publishing at ${scheduledAt}` 
-        : 'Video upload started',
-    }, 201)
+      message: scheduledAt
+        ? `Scheduled to publish to ${platforms.length} platform(s)`
+        : `Publishing to ${platforms.length} platform(s)`,
+      publications: publications.map((p) => ({
+        id: p.id,
+        platform: p.platform,
+        status: p.status,
+        scheduledAt: p.scheduled_at,
+      })),
+    })
   } catch (error) {
-    console.error('Error publishing project:', error)
-    return errorResponse('Failed to publish project', 500)
+    console.error('Error publishing:', error)
+    return errorResponse('Failed to publish video', 500)
   }
 }
 
 /**
  * GET /api/projects/[id]/publish
- * Get all publications for a project
+ * Get publication status for a project
  */
 export async function GET(
   request: NextRequest,
   { params }: RouteParams
 ) {
   try {
-    const { id } = params
+    const { id } = await params
     
-    // Get user ID from auth (placeholder)
-    const userId = 'user-1' // TODO: Get from auth session
+    // Get authenticated user
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    const project = projects.get(id)
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 401)
+    }
+
+    // Get project
+    const project = await getProject(id, user.id)
 
     if (!project) {
       return errorResponse('Project not found', 404)
     }
 
-    // Verify ownership
-    if (project.userId !== userId) {
-      return errorResponse('Access denied', 403)
-    }
+    // Get publications for this project
+    const publications = await getProjectPublications(id) as Array<{
+      id: string
+      platform: string
+      status: string
+      scheduled_at: string | null
+      published_at: string | null
+      published_url: string | null
+      caption: string | null
+      hashtags: string[] | null
+      error_message: string | null
+      views_count: number
+      likes_count: number
+    }>
 
-    // Get all publications for this project
-    const projectPublications = Array.from(publications.values())
-      .filter((p) => p.projectId === id)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-
-    return successResponse({ publications: projectPublications })
+    return successResponse({
+      projectId: id,
+      projectStatus: project.status,
+      publications: publications.map((p) => ({
+        id: p.id,
+        platform: p.platform,
+        status: p.status,
+        scheduledAt: p.scheduled_at,
+        publishedAt: p.published_at,
+        publishedUrl: p.published_url,
+        caption: p.caption,
+        hashtags: p.hashtags,
+        error: p.error_message,
+        views: p.views_count,
+        likes: p.likes_count,
+      })),
+    })
   } catch (error) {
     console.error('Error getting publications:', error)
-    return errorResponse('Failed to get publications', 500)
+    return errorResponse('Failed to get publication status', 500)
   }
-}
-
-/**
- * Publish video to social platform (placeholder implementation)
- */
-async function publishToSocialPlatform(
-  publication: Publication,
-  videoUrl: string
-): Promise<{ postId: string; postUrl: string }> {
-  // Simulate API call delay
-  await new Promise((resolve) => setTimeout(resolve, 3000))
-
-  // In production, this would call the respective platform APIs:
-  // - YouTube: google-api-nodejs-client
-  // - TikTok: TikTok for Developers API
-  // - Instagram: Instagram Graph API (via Facebook)
-  // - Twitter/X: Twitter API v2
-
-  const platformUrls: Record<string, string> = {
-    youtube: 'https://youtube.com/watch?v=',
-    tiktok: 'https://tiktok.com/@user/video/',
-    instagram: 'https://instagram.com/reel/',
-    twitter: 'https://twitter.com/user/status/',
-  }
-
-  const postId = generateId('')
-  const postUrl = `${platformUrls[publication.platform]}${postId}`
-
-  return { postId, postUrl }
 }

@@ -4,39 +4,11 @@ import {
   errorResponse,
   parseBody,
 } from '@/lib/api-utils'
-
-// Import the shared projects store (in real app, this would be database calls)
-// For now, we'll define a simple in-memory store
-const projects = new Map<string, Project>()
-
-interface Project {
-  id: string
-  userId: string
-  title: string
-  topic: string
-  status: 'draft' | 'processing' | 'completed' | 'failed'
-  progress: number
-  settings: ProjectSettings
-  script?: unknown
-  scenes?: unknown[]
-  outputUrl?: string
-  thumbnailUrl?: string
-  durationSeconds?: number
-  costCredits: number
-  createdAt: string
-  updatedAt: string
-}
-
-interface ProjectSettings {
-  style: 'documentary' | 'tutorial' | 'story' | 'review' | 'explainer'
-  duration: number
-  voice: 'professional' | 'casual' | 'energetic' | 'calm'
-  voiceGender?: 'male' | 'female'
-  aspectRatio: '16:9' | '9:16' | '1:1'
-}
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getProject, updateProject, deleteProject } from '@/lib/db'
 
 interface RouteParams {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 /**
@@ -48,20 +20,20 @@ export async function GET(
   { params }: RouteParams
 ) {
   try {
-    const { id } = params
+    const { id } = await params
     
-    // Get user ID from auth (placeholder)
-    const userId = 'user-1' // TODO: Get from auth session
+    // Get authenticated user
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    const project = projects.get(id)
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 401)
+    }
+
+    const project = await getProject(id, user.id)
 
     if (!project) {
       return errorResponse('Project not found', 404)
-    }
-
-    // Verify ownership
-    if (project.userId !== userId) {
-      return errorResponse('Access denied', 403)
     }
 
     return successResponse(project)
@@ -80,38 +52,32 @@ export async function PUT(
   { params }: RouteParams
 ) {
   try {
-    const { id } = params
-    const body = await parseBody<Partial<Project>>(request)
+    const { id } = await params
+    const body = await parseBody<Record<string, unknown>>(request)
 
     if (!body) {
       return errorResponse('Invalid request body')
     }
 
-    // Get user ID from auth (placeholder)
-    const userId = 'user-1' // TODO: Get from auth session
+    // Get authenticated user
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    const project = projects.get(id)
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 401)
+    }
 
-    if (!project) {
+    // Check if project exists and belongs to user
+    const existingProject = await getProject(id, user.id)
+    if (!existingProject) {
       return errorResponse('Project not found', 404)
     }
 
-    // Verify ownership
-    if (project.userId !== userId) {
-      return errorResponse('Access denied', 403)
-    }
-
     // Don't allow updating certain fields
-    const { id: _, userId: __, createdAt: ___, ...updates } = body
+    const { id: _, user_id: __, created_at: ___, ...updates } = body
 
     // Update project
-    const updatedProject: Project = {
-      ...project,
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    }
-
-    projects.set(id, updatedProject)
+    const updatedProject = await updateProject(id, user.id, updates)
 
     return successResponse(updatedProject)
   } catch (error) {
@@ -129,20 +95,20 @@ export async function DELETE(
   { params }: RouteParams
 ) {
   try {
-    const { id } = params
+    const { id } = await params
     
-    // Get user ID from auth (placeholder)
-    const userId = 'user-1' // TODO: Get from auth session
+    // Get authenticated user
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    const project = projects.get(id)
-
-    if (!project) {
-      return errorResponse('Project not found', 404)
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 401)
     }
 
-    // Verify ownership
-    if (project.userId !== userId) {
-      return errorResponse('Access denied', 403)
+    // Check if project exists and belongs to user
+    const project = await getProject(id, user.id)
+    if (!project) {
+      return errorResponse('Project not found', 404)
     }
 
     // Don't allow deleting while processing
@@ -151,7 +117,7 @@ export async function DELETE(
     }
 
     // Delete project
-    projects.delete(id)
+    await deleteProject(id, user.id)
 
     // TODO: Also delete associated files from S3
 

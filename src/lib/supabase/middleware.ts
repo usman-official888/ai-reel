@@ -3,9 +3,15 @@
  * Use this only in middleware.ts
  */
 
-import { createServerClient } from '@supabase/ssr'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 import type { Database } from '@/types/database'
+
+type CookieToSet = {
+  name: string
+  value: string
+  options?: CookieOptions
+}
 
 /**
  * Create Supabase client for middleware
@@ -27,7 +33,7 @@ export async function createMiddlewareSupabaseClient(request: NextRequest) {
         getAll() {
           return request.cookies.getAll()
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: CookieToSet[]) {
           cookiesToSet.forEach(({ name, value }) => {
             request.cookies.set(name, value)
           })
