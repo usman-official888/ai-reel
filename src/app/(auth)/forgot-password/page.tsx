@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
         </p>
         <div className="space-y-4">
           <Button
-            variant="outline"
+            variant="secondary"
             className="w-full"
             onClick={() => window.open('https://gmail.com', '_blank')}
           >

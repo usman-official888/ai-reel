@@ -6,9 +6,9 @@ import {
   parseBody,
   validateRequired,
 } from '@/lib/api-utils'
-import { withDevAuth, AuthenticatedUser } from '@/lib/middleware'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { listProjects, createProject } from '@/lib/db'
-import { ProjectStatus } from '@/types/database'
+import type { ProjectStatus } from '@/types/database'
 
 interface ProjectSettings {
   style: 'documentary' | 'tutorial' | 'story' | 'review' | 'explainer'
@@ -22,11 +22,16 @@ interface ProjectSettings {
  * GET /api/projects
  * List all projects for the current user
  */
-export const GET = withDevAuth(async (
-  request: NextRequest,
-  { user }: { params: Record<string, string>; user: AuthenticatedUser }
-) => {
+export async function GET(request: NextRequest) {
   try {
+    // Get authenticated user
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 401)
+    }
+
     const { searchParams } = new URL(request.url)
     const { page, limit } = getPaginationParams(searchParams)
     
@@ -34,6 +39,7 @@ export const GET = withDevAuth(async (
     const status = searchParams.get('status') as ProjectStatus | null
     const search = searchParams.get('search') || undefined
 
+    // Get projects from database
     const result = await listProjects({
       userId: user.id,
       status: status || undefined,
@@ -55,17 +61,22 @@ export const GET = withDevAuth(async (
     console.error('Error listing projects:', error)
     return errorResponse('Failed to list projects', 500)
   }
-})
+}
 
 /**
  * POST /api/projects
  * Create a new project
  */
-export const POST = withDevAuth(async (
-  request: NextRequest,
-  { user }: { params: Record<string, string>; user: AuthenticatedUser }
-) => {
+export async function POST(request: NextRequest) {
   try {
+    // Get authenticated user
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 401)
+    }
+
     const body = await parseBody<{
       title: string
       topic: string
@@ -92,7 +103,11 @@ export const POST = withDevAuth(async (
       user_id: user.id,
       title: body.title,
       topic: body.topic,
-      settings: settings as unknown as Record<string, unknown>,
+      style: settings.style,
+      duration_target: settings.duration,
+      voice_style: settings.voice,
+      voice_gender: settings.voiceGender || 'male',
+      aspect_ratio: settings.aspectRatio,
     })
 
     return successResponse(project, 201)
@@ -100,4 +115,4 @@ export const POST = withDevAuth(async (
     console.error('Error creating project:', error)
     return errorResponse('Failed to create project', 500)
   }
-})
+}

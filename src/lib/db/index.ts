@@ -28,6 +28,7 @@ export {
   retryJob,
   createPipelineJobs,
   getPipelineStatus,
+  getUserJobs,
 } from './jobs'
 
 // User operations
@@ -43,3 +44,28 @@ export {
   updateSubscription,
   getSubscriptionLimits,
 } from './users'
+
+// Social account operations
+export {
+  getUserSocialAccounts,
+  getSocialAccountByPlatform,
+  upsertSocialAccount,
+  deleteSocialAccount,
+  refreshSocialAccountTokens,
+  isTokenExpired,
+} from './social'
+
+// Transaction operations
+export {
+  createTransaction,
+  getUserTransactions,
+  updateTransactionStatus,
+} from './transactions'
+
+// Publication operations
+export {
+  createPublication,
+  getProjectPublications,
+  updatePublicationStatus,
+  updatePublicationAnalytics,
+} from './publications'

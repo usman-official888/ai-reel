@@ -89,7 +89,8 @@ export async function POST(request: NextRequest) {
 async function handleCheckoutComplete(session: Record<string, unknown>) {
   // Extract metadata
   const userId = session.client_reference_id as string
-  const credits = session.metadata?.credits as string
+  const metadata = session.metadata as Record<string, string> | undefined
+  const credits = metadata?.credits
 
   if (userId && credits) {
     // Add credits to user account

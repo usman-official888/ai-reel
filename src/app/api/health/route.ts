@@ -86,8 +86,8 @@ async function checkDatabase(): Promise<ServiceStatus> {
     const start = Date.now()
     
     // Import dynamically to avoid issues if not configured
-    const { getSupabaseServerClient } = await import('@/lib/supabase')
-    const supabase = getSupabaseServerClient()
+    const { createServerSupabaseClient } = await import('@/lib/supabase/server')
+    const supabase = await createServerSupabaseClient()
     
     // Simple health check query
     const { error } = await supabase.from('users').select('id').limit(1)

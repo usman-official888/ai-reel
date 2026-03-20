@@ -3,24 +3,19 @@ import {
   successResponse,
   errorResponse,
 } from '@/lib/api-utils'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import {
+  getSocialAccountByPlatform,
+  deleteSocialAccount,
+  refreshSocialAccountTokens,
+  isTokenExpired,
+} from '@/lib/db'
+import type { SocialPlatform } from '@/types/database'
 
-// In-memory store (replace with database)
-const socialAccounts = new Map<string, SocialAccount>()
-
-interface SocialAccount {
-  id: string
-  userId: string
-  platform: 'youtube' | 'tiktok' | 'instagram' | 'twitter'
-  accountHandle: string
-  accountName: string
-  profileImageUrl?: string
-  isActive: boolean
-  tokenExpiresAt: string
-  connectedAt: string
-}
+const VALID_PLATFORMS: SocialPlatform[] = ['youtube', 'tiktok', 'instagram', 'twitter']
 
 interface RouteParams {
-  params: { platform: string }
+  params: Promise<{ platform: string }>
 }
 
 /**
@@ -32,27 +27,38 @@ export async function GET(
   { params }: RouteParams
 ) {
   try {
-    const { platform } = params
+    const { platform } = await params
     
     // Validate platform
-    const validPlatforms = ['youtube', 'tiktok', 'instagram', 'twitter']
-    if (!validPlatforms.includes(platform)) {
-      return errorResponse(`Invalid platform. Must be one of: ${validPlatforms.join(', ')}`)
+    if (!VALID_PLATFORMS.includes(platform as SocialPlatform)) {
+      return errorResponse(`Invalid platform. Must be one of: ${VALID_PLATFORMS.join(', ')}`)
     }
 
-    // Get user ID from auth (placeholder)
-    const userId = 'user-1' // TODO: Get from auth session
+    // Get authenticated user
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    const account = Array.from(socialAccounts.values())
-      .find((a) => a.userId === userId && a.platform === platform)
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 401)
+    }
+
+    const account = await getSocialAccountByPlatform(user.id, platform as SocialPlatform)
 
     if (!account) {
       return errorResponse(`No ${platform} account connected`, 404)
     }
 
+    // Return safe data (no tokens)
     return successResponse({
-      ...account,
-      isExpired: new Date(account.tokenExpiresAt) < new Date(),
+      id: account.id,
+      platform: account.platform,
+      accountHandle: account.account_handle,
+      accountName: account.account_name,
+      profileImageUrl: account.profile_image_url,
+      isActive: account.is_active,
+      isExpired: isTokenExpired(account.token_expires_at),
+      tokenExpiresAt: account.token_expires_at,
+      connectedAt: account.created_at,
     })
   } catch (error) {
     console.error('Error getting social account:', error)
@@ -69,31 +75,32 @@ export async function DELETE(
   { params }: RouteParams
 ) {
   try {
-    const { platform } = params
+    const { platform } = await params
     
     // Validate platform
-    const validPlatforms = ['youtube', 'tiktok', 'instagram', 'twitter']
-    if (!validPlatforms.includes(platform)) {
-      return errorResponse(`Invalid platform. Must be one of: ${validPlatforms.join(', ')}`)
+    if (!VALID_PLATFORMS.includes(platform as SocialPlatform)) {
+      return errorResponse(`Invalid platform. Must be one of: ${VALID_PLATFORMS.join(', ')}`)
     }
 
-    // Get user ID from auth (placeholder)
-    const userId = 'user-1' // TODO: Get from auth session
+    // Get authenticated user
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    // Find the account
-    const account = Array.from(socialAccounts.entries())
-      .find(([, a]) => a.userId === userId && a.platform === platform)
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 401)
+    }
+
+    // Check if account exists
+    const account = await getSocialAccountByPlatform(user.id, platform as SocialPlatform)
 
     if (!account) {
       return errorResponse(`No ${platform} account connected`, 404)
     }
 
-    const [accountId] = account
-
     // Delete the account
-    socialAccounts.delete(accountId)
+    await deleteSocialAccount(user.id, platform as SocialPlatform)
 
-    // In production, also revoke the OAuth tokens with the platform
+    // TODO: In production, also revoke the OAuth tokens with the platform
 
     return successResponse({
       disconnected: true,
@@ -115,43 +122,52 @@ export async function PUT(
   { params }: RouteParams
 ) {
   try {
-    const { platform } = params
+    const { platform } = await params
     
     // Validate platform
-    const validPlatforms = ['youtube', 'tiktok', 'instagram', 'twitter']
-    if (!validPlatforms.includes(platform)) {
-      return errorResponse(`Invalid platform. Must be one of: ${validPlatforms.join(', ')}`)
+    if (!VALID_PLATFORMS.includes(platform as SocialPlatform)) {
+      return errorResponse(`Invalid platform. Must be one of: ${VALID_PLATFORMS.join(', ')}`)
     }
 
-    // Get user ID from auth (placeholder)
-    const userId = 'user-1' // TODO: Get from auth session
+    // Get authenticated user
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    // Find the account
-    const accountEntry = Array.from(socialAccounts.entries())
-      .find(([, a]) => a.userId === userId && a.platform === platform)
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 401)
+    }
 
-    if (!accountEntry) {
+    // Check if account exists
+    const account = await getSocialAccountByPlatform(user.id, platform as SocialPlatform)
+
+    if (!account) {
       return errorResponse(`No ${platform} account connected`, 404)
     }
 
-    const [accountId, account] = accountEntry
-
     // In production, this would:
-    // 1. Use the refresh token to get new access token
+    // 1. Use the refresh token to get a new access token from the platform
     // 2. Update the stored tokens
 
     // For demo, just extend the expiration
-    const updatedAccount: SocialAccount = {
-      ...account,
-      tokenExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      isActive: true,
-    }
-
-    socialAccounts.set(accountId, updatedAccount)
+    const updatedAccount = await refreshSocialAccountTokens(
+      user.id,
+      platform as SocialPlatform,
+      {
+        access_token: account.access_token || 'demo_token',
+        refresh_token: account.refresh_token || undefined,
+        token_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      }
+    )
 
     return successResponse({
       refreshed: true,
-      account: updatedAccount,
+      account: {
+        id: updatedAccount.id,
+        platform: updatedAccount.platform,
+        accountHandle: updatedAccount.account_handle,
+        isActive: updatedAccount.is_active,
+        tokenExpiresAt: updatedAccount.token_expires_at,
+      },
     })
   } catch (error) {
     console.error('Error refreshing social account:', error)

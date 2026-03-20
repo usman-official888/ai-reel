@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
+interface CookieToSet {
+  name: string
+  value: string
+  options?: Record<string, unknown>
+}
+
 /**
  * GET /api/auth/callback
  * Handles the OAuth callback and email verification
@@ -32,7 +38,7 @@ export async function GET(request: NextRequest) {
           getAll() {
             return cookieStore.getAll()
           },
-          setAll(cookiesToSet) {
+          setAll(cookiesToSet: CookieToSet[]) {
             try {
               cookiesToSet.forEach(({ name, value, options }) =>
                 cookieStore.set(name, value, options)
@@ -46,7 +52,7 @@ export async function GET(request: NextRequest) {
     )
 
     // Exchange code for session
-    const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
 
     if (exchangeError) {
       console.error('Code exchange error:', exchangeError)

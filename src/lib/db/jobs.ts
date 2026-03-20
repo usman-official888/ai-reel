@@ -3,13 +3,14 @@
  * Handles all job-related database operations
  */
 
-import { getSupabaseServerClient } from '../supabase'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { 
   Job, 
   JobInsert, 
   JobUpdate,
   JobType,
-  JobStatus 
+  JobStatus,
+  Json,
 } from '@/types/database'
 import { generateId } from '../api-utils'
 
@@ -19,12 +20,12 @@ import { generateId } from '../api-utils'
 export async function createJob(
   data: Omit<JobInsert, 'id' | 'created_at' | 'updated_at'>
 ): Promise<Job> {
-  const supabase = getSupabaseServerClient()
+  const supabase = await createServerSupabaseClient()
 
-  const job: JobInsert = {
+  const job = {
     id: generateId('job'),
     ...data,
-    status: 'queued',
+    status: 'queued' as const,
     progress: 0,
     retry_count: 0,
     priority: data.priority || 0,
@@ -32,7 +33,7 @@ export async function createJob(
 
   const { data: created, error } = await supabase
     .from('jobs')
-    .insert(job)
+    .insert(job as never)
     .select()
     .single()
 
@@ -40,14 +41,14 @@ export async function createJob(
     throw new Error(`Failed to create job: ${error.message}`)
   }
 
-  return created
+  return created as Job
 }
 
 /**
  * Get jobs for a project
  */
 export async function getProjectJobs(projectId: string): Promise<Job[]> {
-  const supabase = getSupabaseServerClient()
+  const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
     .from('jobs')
@@ -66,7 +67,7 @@ export async function getProjectJobs(projectId: string): Promise<Job[]> {
  * Get a single job by ID
  */
 export async function getJob(jobId: string): Promise<Job | null> {
-  const supabase = getSupabaseServerClient()
+  const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase
     .from('jobs')
@@ -93,7 +94,7 @@ export async function updateJobProgress(
   progress: number,
   additionalUpdates?: Partial<JobUpdate>
 ): Promise<void> {
-  const supabase = getSupabaseServerClient()
+  const supabase = await createServerSupabaseClient()
 
   const updates: JobUpdate = {
     status,
@@ -112,7 +113,7 @@ export async function updateJobProgress(
 
   const { error } = await supabase
     .from('jobs')
-    .update(updates)
+    .update(updates as never)
     .eq('id', jobId)
 
   if (error) {
@@ -140,7 +141,7 @@ export async function completeJob(
   outputData: Record<string, unknown>
 ): Promise<void> {
   await updateJobProgress(jobId, 'completed', 100, {
-    output_data: outputData,
+    output_data: outputData as Json,
   })
 }
 
@@ -151,7 +152,7 @@ export async function getQueuedJobs(
   jobType?: JobType,
   limit: number = 10
 ): Promise<Job[]> {
-  const supabase = getSupabaseServerClient()
+  const supabase = await createServerSupabaseClient()
 
   let query = supabase
     .from('jobs')
@@ -181,7 +182,7 @@ export async function retryJob(
   jobId: string,
   maxRetries: number = 3
 ): Promise<boolean> {
-  const supabase = getSupabaseServerClient()
+  const supabase = await createServerSupabaseClient()
 
   // Get current retry count
   const job = await getJob(jobId)
@@ -198,13 +199,13 @@ export async function retryJob(
   const { error } = await supabase
     .from('jobs')
     .update({
-      status: 'queued',
+      status: 'queued' as const,
       retry_count: job.retry_count + 1,
       error_message: null,
       started_at: null,
       completed_at: null,
       updated_at: new Date().toISOString(),
-    })
+    } as never)
     .eq('id', jobId)
 
   if (error) {
@@ -218,7 +219,8 @@ export async function retryJob(
  * Create all jobs for a video generation pipeline
  */
 export async function createPipelineJobs(
-  projectId: string
+  projectId: string,
+  userId: string
 ): Promise<Job[]> {
   const jobTypes: JobType[] = ['script', 'image', 'video', 'voice', 'assembly']
   
@@ -227,6 +229,7 @@ export async function createPipelineJobs(
   for (let i = 0; i < jobTypes.length; i++) {
     const job = await createJob({
       project_id: projectId,
+      user_id: userId,
       job_type: jobTypes[i],
       priority: jobTypes.length - i, // Higher priority for earlier jobs
     })
@@ -260,4 +263,45 @@ export async function getPipelineStatus(
   const progress = total > 0 ? Math.round(totalProgress / total) : 0
 
   return { total, completed, running, failed, progress }
+}
+
+/**
+ * Get jobs for a user
+ */
+export async function getUserJobs(
+  userId: string,
+  options: {
+    status?: JobStatus
+    type?: JobType
+    projectId?: string
+    limit?: number
+    offset?: number
+  } = {}
+): Promise<{ jobs: Job[]; total: number }> {
+  const supabase = await createServerSupabaseClient()
+  const { status, type, projectId, limit = 20, offset = 0 } = options
+
+  let query = supabase
+    .from('jobs')
+    .select('*', { count: 'exact' })
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+
+  if (status) {
+    query = query.eq('status', status)
+  }
+  if (type) {
+    query = query.eq('type', type)
+  }
+  if (projectId) {
+    query = query.eq('project_id', projectId)
+  }
+
+  const { data, error, count } = await query.range(offset, offset + limit - 1)
+
+  if (error) {
+    throw new Error(`Failed to get user jobs: ${error.message}`)
+  }
+
+  return { jobs: data || [], total: count || 0 }
 }
