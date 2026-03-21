@@ -1,18 +1,91 @@
+'use client'
+
 import Link from 'next/link'
-import { Video, Eye, Zap, Clock, Plus, ArrowRight } from 'lucide-react'
+import { Video, Eye, Zap, Clock, Plus, ArrowRight, Loader2 } from 'lucide-react'
 import { Header } from '@/components/layout'
 import { Button } from '@/components/ui'
 import { StatsCard, ProjectCard, RecentActivity } from '@/components/dashboard'
-import { mockProjects, mockStats, recentActivity } from '@/data/mock'
+import { useProjects, useCredits } from '@/lib/hooks'
+import { formatRelativeTime } from '@/lib/utils'
 
 export default function DashboardPage() {
+  // Fetch real data
+  const { data: projectsData, loading: projectsLoading, error: projectsError } = useProjects({ limit: 10 })
+  const { data: creditsData, loading: creditsLoading } = useCredits()
+
   // Get recent projects (last 4)
-  const recentProjects = mockProjects
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 4)
+  const recentProjects = projectsData?.projects
+    ?.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+    .slice(0, 4) || []
 
   // Get processing projects
-  const processingProjects = mockProjects.filter(p => p.status === 'processing')
+  const processingProjects = projectsData?.projects?.filter(p => p.status === 'processing') || []
+
+  // Calculate stats
+  const totalVideos = projectsData?.pagination?.total || 0
+  const completedVideos = projectsData?.projects?.filter(p => p.status === 'completed' || p.status === 'published').length || 0
+  const creditsUsed = creditsData?.usedThisMonth || 0
+  const creditsBalance = creditsData?.balance || 0
+
+  // Generate recent activity from projects
+  const recentActivity = projectsData?.projects?.slice(0, 5).map((p, index) => {
+    const typeMap: Record<string, string> = {
+      completed: 'video_completed',
+      processing: 'video_processing',
+      published: 'video_published',
+      failed: 'video_failed',
+      draft: 'video_created',
+    }
+    const messageMap: Record<string, string> = {
+      completed: `Video "${p.title}" finished processing`,
+      processing: `Video "${p.title}" is being generated`,
+      published: `Video "${p.title}" was published`,
+      failed: `Video "${p.title}" failed to process`,
+      draft: `Draft "${p.title}" was created`,
+    }
+    return {
+      id: index,
+      type: typeMap[p.status] || 'video_completed',
+      message: messageMap[p.status] || `Video "${p.title}" updated`,
+      time: formatRelativeTime(p.updated_at),
+    }
+  }) || []
+
+  // Loading state
+  if (projectsLoading && !projectsData) {
+    return (
+      <>
+        <Header
+          title="Dashboard"
+          subtitle="Welcome back! Here's an overview of your video projects."
+        />
+        <div className="p-6 flex items-center justify-center min-h-[400px]">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-muted">Loading dashboard...</p>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  // Error state
+  if (projectsError) {
+    return (
+      <>
+        <Header
+          title="Dashboard"
+          subtitle="Welcome back! Here's an overview of your video projects."
+        />
+        <div className="p-6">
+          <div className="bg-error/10 border border-error/20 rounded-xl p-6 text-center">
+            <p className="text-error mb-4">Failed to load dashboard: {projectsError}</p>
+            <Button onClick={() => window.location.reload()}>Retry</Button>
+          </div>
+        </div>
+      </>
+    )
+  }
 
   return (
     <>
@@ -34,27 +107,26 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatsCard
             title="Total Videos"
-            value={mockStats.totalVideos}
-            change={{ value: '+12%', positive: true }}
+            value={totalVideos}
+            change={totalVideos > 0 ? { value: `${completedVideos} completed`, positive: true } : undefined}
             icon={Video}
             iconColor="text-primary"
           />
           <StatsCard
-            title="Total Views"
-            value={mockStats.totalViews.toLocaleString()}
-            change={{ value: '+28%', positive: true }}
-            icon={Eye}
+            title="Credits Balance"
+            value={creditsLoading ? '...' : creditsBalance}
+            icon={Zap}
             iconColor="text-accent-cyan"
           />
           <StatsCard
             title="Credits Used"
-            value={mockStats.creditsUsed}
+            value={creditsLoading ? '...' : creditsUsed}
             icon={Zap}
             iconColor="text-accent-orange"
           />
           <StatsCard
-            title="Avg. Processing"
-            value={mockStats.avgProcessingTime}
+            title="Processing"
+            value={processingProjects.length}
             icon={Clock}
             iconColor="text-accent-pink"
           />
@@ -98,7 +170,21 @@ export default function DashboardPage() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {recentProjects.map((project) => (
-                <ProjectCard key={project.id} project={project} />
+                <ProjectCard 
+                  key={project.id} 
+                  project={{
+                    id: project.id,
+                    title: project.title,
+                    topic: project.topic,
+                    thumbnailUrl: project.thumbnail_url || undefined,
+                    status: project.status,
+                    durationSeconds: project.duration_target || undefined,
+                    progress: project.progress,
+                    createdAt: project.created_at,
+                    updatedAt: project.updated_at,
+                    costCredits: project.cost_credits,
+                  }} 
+                />
               ))}
             </div>
 

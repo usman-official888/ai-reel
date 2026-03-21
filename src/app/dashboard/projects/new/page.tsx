@@ -20,6 +20,7 @@ import {
 import { Header } from '@/components/layout'
 import { Button, Input, Textarea, Card, Progress } from '@/components/ui'
 import { cn } from '@/lib/utils'
+import { projectsApi } from '@/lib/api-client'
 
 type Step = 'topic' | 'style' | 'preview' | 'generate'
 
@@ -65,6 +66,8 @@ export default function NewProjectPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [generationProgress, setGenerationProgress] = useState(0)
   const [generationStatus, setGenerationStatus] = useState('')
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   
   const [settings, setSettings] = useState<VideoSettings>({
     topic: '',
@@ -128,31 +131,84 @@ export default function NewProjectPage() {
     }, 2000)
   }
 
-  const startVideoGeneration = () => {
+  const startVideoGeneration = async () => {
     setCurrentStep('generate')
     setIsGenerating(true)
+    setError(null)
     
-    const stages = [
-      { progress: 10, status: 'Generating images for scenes...' },
-      { progress: 30, status: 'Creating video clips from images...' },
-      { progress: 50, status: 'Generating voiceover narration...' },
-      { progress: 70, status: 'Synchronizing audio and video...' },
-      { progress: 85, status: 'Adding captions and effects...' },
-      { progress: 95, status: 'Finalizing video...' },
-      { progress: 100, status: 'Complete!' },
-    ]
-
-    let i = 0
-    const interval = setInterval(() => {
-      if (i < stages.length) {
-        setGenerationProgress(stages[i].progress)
-        setGenerationStatus(stages[i].status)
-        i++
-      } else {
-        clearInterval(interval)
-        setIsGenerating(false)
+    try {
+      // Parse duration string to number
+      const durationMap: Record<string, number> = {
+        '30s': 30,
+        '60s': 60,
+        '90s': 90,
+        '120s': 120,
       }
-    }, 1500)
+      
+      // First create the project
+      setGenerationStatus('Creating project...')
+      setGenerationProgress(5)
+      
+      const createResult = await projectsApi.create({
+        title: generatedScript?.title || settings.topic.slice(0, 50),
+        topic: settings.topic,
+        style: settings.style,
+        duration_target: durationMap[settings.duration] || 60,
+        voice_style: settings.voice,
+        voice_gender: 'neutral',
+        aspect_ratio: settings.aspectRatio,
+      })
+      
+      if (!createResult.success || !createResult.data) {
+        throw new Error(createResult.error || 'Failed to create project')
+      }
+      
+      const projectId = createResult.data.id
+      setCreatedProjectId(projectId)
+      
+      // Start generation
+      setGenerationStatus('Starting video generation...')
+      setGenerationProgress(10)
+      
+      const genResult = await projectsApi.startGeneration(projectId)
+      
+      if (!genResult.success) {
+        throw new Error(genResult.error || 'Failed to start generation')
+      }
+      
+      // Poll for progress
+      const pollProgress = async () => {
+        const statusResult = await projectsApi.getGenerationStatus(projectId)
+        
+        if (statusResult.success && statusResult.data) {
+          const { status, progress, currentStep: step } = statusResult.data
+          setGenerationProgress(progress)
+          setGenerationStatus(step || 'Processing...')
+          
+          if (status === 'completed') {
+            setIsGenerating(false)
+            setGenerationProgress(100)
+            setGenerationStatus('Complete!')
+            return
+          }
+          
+          if (status === 'failed') {
+            throw new Error('Video generation failed')
+          }
+          
+          // Continue polling
+          setTimeout(pollProgress, 2000)
+        }
+      }
+      
+      // Start polling after a short delay
+      setTimeout(pollProgress, 2000)
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+      setIsGenerating(false)
+      // Don't change step - let user see error and retry
+    }
   }
 
   return (
@@ -426,7 +482,27 @@ export default function NewProjectPage() {
           {currentStep === 'generate' && (
             <div className="animate-fade-in text-center">
               <div className="max-w-md mx-auto">
-                {isGenerating ? (
+                {error ? (
+                  <>
+                    <div className="w-20 h-20 rounded-2xl bg-error/20 mx-auto mb-6 flex items-center justify-center">
+                      <svg className="w-10 h-10 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <h2 className="text-2xl font-bold text-foreground mb-2">Generation Failed</h2>
+                    <p className="text-error mb-8">{error}</p>
+                    
+                    <div className="flex justify-center gap-3">
+                      <Button variant="secondary" onClick={() => router.push('/dashboard/projects')}>
+                        Cancel
+                      </Button>
+                      <Button onClick={() => { setError(null); startVideoGeneration(); }}>
+                        <RefreshCw className="w-4 h-4" />
+                        Try Again
+                      </Button>
+                    </div>
+                  </>
+                ) : isGenerating ? (
                   <>
                     <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-accent-pink mx-auto mb-6 flex items-center justify-center">
                       <Loader2 className="w-10 h-10 text-white animate-spin" />
@@ -448,7 +524,7 @@ export default function NewProjectPage() {
                       <Button variant="secondary" onClick={() => router.push('/dashboard/projects')}>
                         View All Videos
                       </Button>
-                      <Button onClick={() => router.push('/dashboard/projects/proj-1')}>
+                      <Button onClick={() => router.push(`/dashboard/projects/${createdProjectId}`)}>
                         <Play className="w-4 h-4" />
                         Watch Video
                       </Button>

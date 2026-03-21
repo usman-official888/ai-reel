@@ -1,5 +1,5 @@
 // Project types
-export type ProjectStatus = 'draft' | 'processing' | 'completed' | 'failed'
+export type ProjectStatus = 'draft' | 'processing' | 'completed' | 'failed' | 'published'
 
 export type JobType = 'script' | 'image' | 'video' | 'voice' | 'assembly'
 

@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
-import { User, Bell, Shield, Palette, Globe, CreditCard, Key, Trash2, Save } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { User, Bell, Shield, Key, Trash2, Save, Loader2 } from 'lucide-react'
 import { Header } from '@/components/layout'
 import { Button, Input, Card } from '@/components/ui'
 import { cn } from '@/lib/utils'
-import { mockUser } from '@/data/mock'
+import { useUser, useCredits } from '@/lib/hooks'
+import { userApi } from '@/lib/api-client'
 
 type SettingsTab = 'profile' | 'notifications' | 'security' | 'api'
 
@@ -16,13 +17,24 @@ const tabs = [
   { id: 'api', label: 'API Keys', icon: Key },
 ]
 
+const TIER_LABELS: Record<string, { label: string; price: string; credits: string }> = {
+  free: { label: 'Free Plan', price: '$0/mo', credits: '3 credits' },
+  starter: { label: 'Starter Plan', price: '$19/mo', credits: '30 credits' },
+  pro: { label: 'Pro Plan', price: '$49/mo', credits: '100 credits' },
+  business: { label: 'Business Plan', price: '$149/mo', credits: '500 credits' },
+  enterprise: { label: 'Enterprise Plan', price: 'Custom', credits: 'Unlimited' },
+}
+
 export default function SettingsPage() {
+  const { data: userData, loading: userLoading, error: userError, refetch: refetchUser } = useUser()
+  const { data: creditsData } = useCredits()
+  
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
   const [isSaving, setIsSaving] = useState(false)
   
   const [profile, setProfile] = useState({
-    fullName: mockUser.fullName,
-    email: mockUser.email,
+    fullName: '',
+    email: '',
   })
 
   const [notifications, setNotifications] = useState({
@@ -33,9 +45,63 @@ export default function SettingsPage() {
     pushNotifications: true,
   })
 
-  const handleSave = () => {
+  // Update profile when user data loads
+  useEffect(() => {
+    if (userData) {
+      setProfile({
+        fullName: userData.full_name || '',
+        email: userData.email || '',
+      })
+    }
+  }, [userData])
+
+  const handleSave = async () => {
     setIsSaving(true)
-    setTimeout(() => setIsSaving(false), 1000)
+    const result = await userApi.update({ full_name: profile.fullName })
+    if (result.success) {
+      refetchUser()
+    } else {
+      alert(`Failed to save: ${result.error}`)
+    }
+    setIsSaving(false)
+  }
+
+  const tierInfo = TIER_LABELS[userData?.subscription_tier || 'free']
+
+  // Loading state
+  if (userLoading && !userData) {
+    return (
+      <>
+        <Header
+          title="Settings"
+          subtitle="Manage your account preferences"
+        />
+        <div className="p-6 flex items-center justify-center min-h-[400px]">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-muted">Loading settings...</p>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  // Error state
+  if (userError) {
+    return (
+      <>
+        <Header
+          title="Settings"
+          subtitle="Manage your account preferences"
+        />
+        <div className="p-6">
+          <div className="bg-error/10 border border-error/20 rounded-xl p-6 text-center">
+            <p className="text-error mb-4">Failed to load settings: {userError}</p>
+            <Button onClick={() => refetchUser()}>Retry</Button>
+          </div>
+        </div>
+      </>
+    )
   }
 
   return (
@@ -82,7 +148,7 @@ export default function SettingsPage() {
                     
                     <div className="flex items-center gap-6 mb-6">
                       <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent-pink flex items-center justify-center text-white text-2xl font-bold">
-                        {profile.fullName.split(' ').map(n => n[0]).join('').toUpperCase()}
+                        {profile.fullName ? profile.fullName.split(' ').map(n => n[0]).join('').toUpperCase() : userData?.email?.[0].toUpperCase() || '?'}
                       </div>
                       <div>
                         <Button variant="secondary" size="sm">
@@ -102,8 +168,10 @@ export default function SettingsPage() {
                         label="Email Address"
                         type="email"
                         value={profile.email}
-                        onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                        disabled
+                        className="opacity-60"
                       />
+                      <p className="text-xs text-muted -mt-2">Email cannot be changed</p>
                     </div>
                   </Card>
 
@@ -111,10 +179,15 @@ export default function SettingsPage() {
                     <h3 className="text-lg font-semibold text-foreground mb-6">Subscription</h3>
                     <div className="flex items-center justify-between p-4 bg-gradient-to-r from-primary/10 to-accent-pink/10 rounded-xl border border-primary/20">
                       <div>
-                        <p className="font-semibold text-foreground">Pro Plan</p>
-                        <p className="text-sm text-muted">100 credits/month • $49/mo</p>
+                        <p className="font-semibold text-foreground">{tierInfo.label}</p>
+                        <p className="text-sm text-muted">{tierInfo.credits}/month • {tierInfo.price}</p>
+                        {creditsData && (
+                          <p className="text-xs text-muted mt-1">
+                            {creditsData.balance} credits remaining • {creditsData.usedThisMonth} used this month
+                          </p>
+                        )}
                       </div>
-                      <Button variant="secondary">
+                      <Button variant="secondary" onClick={() => window.location.href = '/dashboard/billing'}>
                         Manage Plan
                       </Button>
                     </div>
@@ -254,30 +327,9 @@ export default function SettingsPage() {
                       </Button>
                     </div>
 
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-4 bg-card-hover rounded-lg">
-                        <div>
-                          <p className="font-medium text-foreground">Production Key</p>
-                          <p className="text-sm text-muted font-mono">vf_live_****************************abcd</p>
-                          <p className="text-xs text-muted mt-1">Created Mar 1, 2024 • Last used 2 hours ago</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="sm">Copy</Button>
-                          <Button variant="ghost" size="sm" className="text-error">Revoke</Button>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between p-4 bg-card-hover rounded-lg">
-                        <div>
-                          <p className="font-medium text-foreground">Development Key</p>
-                          <p className="text-sm text-muted font-mono">vf_test_****************************efgh</p>
-                          <p className="text-xs text-muted mt-1">Created Feb 15, 2024 • Never used</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="sm">Copy</Button>
-                          <Button variant="ghost" size="sm" className="text-error">Revoke</Button>
-                        </div>
-                      </div>
+                    <div className="text-center py-8 text-muted">
+                      <p>No API keys created yet.</p>
+                      <p className="text-sm mt-2">Generate a key to integrate with the VideoForge API.</p>
                     </div>
                   </Card>
 

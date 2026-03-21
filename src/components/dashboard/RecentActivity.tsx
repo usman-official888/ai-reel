@@ -15,9 +15,11 @@ interface RecentActivityProps {
 const activityIcons: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
   video_completed: { icon: CheckCircle, color: 'text-success', bg: 'bg-success/10' },
   video_published: { icon: Share2, color: 'text-info', bg: 'bg-info/10' },
+  video_processing: { icon: Video, color: 'text-warning', bg: 'bg-warning/10' },
+  video_created: { icon: Video, color: 'text-primary', bg: 'bg-primary/10' },
+  video_failed: { icon: AlertCircle, color: 'text-error', bg: 'bg-error/10' },
   credits_added: { icon: CreditCard, color: 'text-primary', bg: 'bg-primary/10' },
   account_connected: { icon: LinkIcon, color: 'text-accent-cyan', bg: 'bg-accent-cyan/10' },
-  video_failed: { icon: AlertCircle, color: 'text-error', bg: 'bg-error/10' },
 }
 
 export function RecentActivity({ activities }: RecentActivityProps) {

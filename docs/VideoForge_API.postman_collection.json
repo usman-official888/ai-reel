@@ -1,0 +1,790 @@
+{
+  "info": {
+    "name": "VideoForge AI API",
+    "description": "Complete API collection for VideoForge AI - Automated Video Generation Platform",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "project_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "job_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "health"]
+            },
+            "description": "Check API health status and service connectivity"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Signup",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data.session) {",
+                  "    pm.collectionVariables.set('access_token', jsonData.data.session.accessToken);",
+                  "    pm.collectionVariables.set('refresh_token', jsonData.data.session.refreshToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"SecurePass123\",\n  \"fullName\": \"John Doe\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/signup",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "signup"]
+            },
+            "description": "Create a new user account. Password must be at least 6 characters with uppercase, lowercase, and numbers."
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data.session) {",
+                  "    pm.collectionVariables.set('access_token', jsonData.data.session.accessToken);",
+                  "    pm.collectionVariables.set('refresh_token', jsonData.data.session.refreshToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"SecurePass123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Login with email and password. Returns access token and refresh token."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current User (Me)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "me"]
+            },
+            "description": "Get currently authenticated user with profile data"
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data.session) {",
+                  "    pm.collectionVariables.set('access_token', jsonData.data.session.accessToken);",
+                  "    pm.collectionVariables.set('refresh_token', jsonData.data.session.refreshToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/refresh",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "refresh"]
+            },
+            "description": "Refresh access token using refresh token"
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "logout"]
+            },
+            "description": "Logout and invalidate current session"
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/forgot-password",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "forgot-password"]
+            },
+            "description": "Request a password reset email"
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"NewSecurePass123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/reset-password",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "reset-password"]
+            },
+            "description": "Reset password after clicking email link. Requires valid session from reset link."
+          },
+          "response": []
+        },
+        {
+          "name": "Auth Callback (OAuth)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/auth/callback?code=AUTH_CODE",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "callback"],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "AUTH_CODE",
+                  "description": "Authorization code from OAuth provider"
+                }
+              ]
+            },
+            "description": "OAuth callback handler for social login (Google, GitHub, etc.)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User",
+      "item": [
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/user",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user"]
+            },
+            "description": "Get current authenticated user profile"
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"John Doe\",\n  \"avatar_url\": \"https://example.com/avatar.jpg\",\n  \"preferences\": {\n    \"theme\": \"dark\",\n    \"notifications\": true,\n    \"defaultStyle\": \"documentary\",\n    \"defaultVoice\": \"professional\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/user",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user"]
+            },
+            "description": "Update user profile information and preferences"
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Credits",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/user/credits",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user", "credits"]
+            },
+            "description": "Get user's credit balance and usage history"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Credits",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 100,\n  \"paymentMethod\": \"stripe\",\n  \"paymentId\": \"pi_xxxxxxxxxxxxx\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/user/credits",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user", "credits"]
+            },
+            "description": "Add credits to user account (after successful payment)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Projects",
+      "item": [
+        {
+          "name": "List Projects",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects?page=1&limit=10&status=all",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Items per page (default: 10, max: 50)"
+                },
+                {
+                  "key": "status",
+                  "value": "all",
+                  "description": "Filter by status: all, draft, processing, completed, failed"
+                }
+              ]
+            },
+            "description": "Get paginated list of user's projects"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Project",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.id) {",
+                  "    pm.collectionVariables.set('project_id', jsonData.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"How AI is Transforming Healthcare\",\n  \"topic\": \"Artificial Intelligence applications in modern healthcare, from diagnosis to treatment planning\",\n  \"style\": \"documentary\",\n  \"duration_target\": 60,\n  \"voice_style\": \"professional\",\n  \"voice_gender\": \"male\",\n  \"aspect_ratio\": \"9:16\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/projects",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects"]
+            },
+            "description": "Create a new video project"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Project",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "{{project_id}}"]
+            },
+            "description": "Get detailed information about a specific project"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Project",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Project Title\",\n  \"topic\": \"Updated topic description\",\n  \"style\": \"explainer\",\n  \"voice_style\": \"casual\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "{{project_id}}"]
+            },
+            "description": "Update project details (only for draft projects)"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Project",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "{{project_id}}"]
+            },
+            "description": "Delete a project and all associated data"
+          },
+          "response": []
+        },
+        {
+          "name": "Start Video Generation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.jobs && jsonData.data.jobs.length > 0) {",
+                  "    pm.collectionVariables.set('job_id', jsonData.data.jobs[0].id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"priority\": \"normal\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}/generate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "{{project_id}}", "generate"]
+            },
+            "description": "Start the AI video generation pipeline for a project"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Generation Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}/generate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "{{project_id}}", "generate"]
+            },
+            "description": "Get current status of video generation pipeline"
+          },
+          "response": []
+        },
+        {
+          "name": "Publish to Social Media",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"platforms\": [\"youtube\", \"tiktok\", \"instagram\"],\n  \"caption\": \"Check out this amazing AI-generated video! 🚀\",\n  \"hashtags\": [\"AI\", \"Technology\", \"VideoForge\"],\n  \"scheduledAt\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}/publish",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "{{project_id}}", "publish"]
+            },
+            "description": "Publish completed video to connected social media platforms"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Publication Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/projects/{{project_id}}/publish",
+              "host": ["{{base_url}}"],
+              "path": ["api", "projects", "{{project_id}}", "publish"]
+            },
+            "description": "Get publication status for all platforms"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Jobs",
+      "item": [
+        {
+          "name": "List User Jobs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/jobs?status=all&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "jobs"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "all",
+                  "description": "Filter by status: all, queued, running, completed, failed"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Number of jobs to return (default: 20)"
+                }
+              ]
+            },
+            "description": "Get list of all jobs for the authenticated user"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Job Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/jobs/{{job_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "jobs", "{{job_id}}"]
+            },
+            "description": "Get detailed information about a specific job"
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Job",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/jobs/{{job_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "jobs", "{{job_id}}"]
+            },
+            "description": "Cancel a queued or running job"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Social Accounts",
+      "item": [
+        {
+          "name": "List Connected Accounts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/social",
+              "host": ["{{base_url}}"],
+              "path": ["api", "social"]
+            },
+            "description": "Get all connected social media accounts"
+          },
+          "response": []
+        },
+        {
+          "name": "Connect Social Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"platform\": \"youtube\",\n  \"authCode\": \"oauth_authorization_code\",\n  \"redirectUri\": \"http://localhost:3000/api/social/callback\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/social",
+              "host": ["{{base_url}}"],
+              "path": ["api", "social"]
+            },
+            "description": "Connect a new social media account via OAuth"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Platform Account",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/social/youtube",
+              "host": ["{{base_url}}"],
+              "path": ["api", "social", "youtube"]
+            },
+            "description": "Get details of a specific platform connection"
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Platform Tokens",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/social/youtube",
+              "host": ["{{base_url}}"],
+              "path": ["api", "social", "youtube"]
+            },
+            "description": "Refresh OAuth tokens for a platform"
+          },
+          "response": []
+        },
+        {
+          "name": "Disconnect Platform",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/social/youtube",
+              "host": ["{{base_url}}"],
+              "path": ["api", "social", "youtube"]
+            },
+            "description": "Disconnect a social media account"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "Stripe Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "stripe-signature",
+                "value": "{{stripe_signature}}",
+                "description": "Stripe webhook signature"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"checkout.session.completed\",\n  \"data\": {\n    \"object\": {\n      \"id\": \"cs_test_xxxxx\",\n      \"customer\": \"cus_xxxxx\",\n      \"metadata\": {\n        \"userId\": \"user_xxxxx\",\n        \"credits\": \"100\"\n      }\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/webhooks/stripe",
+              "host": ["{{base_url}}"],
+              "path": ["api", "webhooks", "stripe"]
+            },
+            "description": "Stripe webhook endpoint for payment events"
+          },
+          "response": []
+        },
+        {
+          "name": "AI Provider Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-webhook-secret",
+                "value": "{{ai_webhook_secret}}",
+                "description": "AI provider webhook secret"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"fal\",\n  \"event\": \"generation.completed\",\n  \"jobId\": \"job_xxxxx\",\n  \"result\": {\n    \"url\": \"https://storage.fal.ai/output.mp4\",\n    \"duration\": 30\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/webhooks/ai",
+              "host": ["{{base_url}}"],
+              "path": ["api", "webhooks", "ai"]
+            },
+            "description": "Webhook endpoint for AI provider callbacks"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
