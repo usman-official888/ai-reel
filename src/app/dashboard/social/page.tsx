@@ -1,23 +1,23 @@
 'use client'
 
 import { useState } from 'react'
-import { Youtube, Instagram, Twitter, Plus, CheckCircle, XCircle, ExternalLink, Trash2 } from 'lucide-react'
+import { Youtube, Instagram, Twitter, Plus, CheckCircle, ExternalLink, Trash2, Loader2 } from 'lucide-react'
 import { Header } from '@/components/layout'
 import { Button, Card, Badge } from '@/components/ui'
-import { mockSocialAccounts } from '@/data/mock'
+import { useSocialAccounts } from '@/lib/hooks'
+import { socialApi } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
-import { SocialPlatform } from '@/types'
 
 const platforms = [
   { 
-    id: 'youtube' as SocialPlatform, 
+    id: 'youtube', 
     name: 'YouTube', 
     icon: Youtube, 
     color: '#FF0000',
     description: 'Upload videos directly to your channel'
   },
   { 
-    id: 'tiktok' as SocialPlatform, 
+    id: 'tiktok', 
     name: 'TikTok', 
     icon: ({ className }: { className?: string }) => (
       <svg className={className} fill="currentColor" viewBox="0 0 24 24">
@@ -28,14 +28,14 @@ const platforms = [
     description: 'Share short-form videos'
   },
   { 
-    id: 'instagram' as SocialPlatform, 
+    id: 'instagram', 
     name: 'Instagram', 
     icon: Instagram, 
     color: '#E1306C',
     description: 'Post Reels and feed videos'
   },
   { 
-    id: 'twitter' as SocialPlatform, 
+    id: 'twitter', 
     name: 'X / Twitter', 
     icon: Twitter, 
     color: '#000000',
@@ -44,17 +44,68 @@ const platforms = [
 ]
 
 export default function SocialAccountsPage() {
-  const [accounts, setAccounts] = useState(mockSocialAccounts)
+  const { data: socialData, loading, error, refetch } = useSocialAccounts()
+  const [disconnecting, setDisconnecting] = useState<string | null>(null)
+  const [connecting, setConnecting] = useState<string | null>(null)
 
+  const accounts = socialData?.accounts || []
   const connectedPlatforms = accounts.map(a => a.platform)
 
-  const handleConnect = (platformId: SocialPlatform) => {
-    // Simulate OAuth flow
-    console.log('Connecting to', platformId)
+  const handleConnect = async (platformId: string) => {
+    setConnecting(platformId)
+    // In a real implementation, this would open OAuth flow
+    // For now, we'll show a message
+    alert(`OAuth flow for ${platformId} would open here. This requires setting up OAuth credentials for each platform.`)
+    setConnecting(null)
   }
 
-  const handleDisconnect = (accountId: string) => {
-    setAccounts(accounts.filter(a => a.id !== accountId))
+  const handleDisconnect = async (platform: string) => {
+    if (!confirm(`Are you sure you want to disconnect your ${platform} account?`)) return
+    
+    setDisconnecting(platform)
+    const result = await socialApi.disconnect(platform)
+    if (result.success) {
+      refetch()
+    } else {
+      alert(`Failed to disconnect: ${result.error}`)
+    }
+    setDisconnecting(null)
+  }
+
+  // Loading state
+  if (loading && !socialData) {
+    return (
+      <>
+        <Header
+          title="Social Accounts"
+          subtitle="Connect your social media accounts to publish videos directly"
+        />
+        <div className="p-6 flex items-center justify-center min-h-[400px]">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-muted">Loading accounts...</p>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <>
+        <Header
+          title="Social Accounts"
+          subtitle="Connect your social media accounts to publish videos directly"
+        />
+        <div className="p-6">
+          <div className="bg-error/10 border border-error/20 rounded-xl p-6 text-center">
+            <p className="text-error mb-4">Failed to load accounts: {error}</p>
+            <Button onClick={() => refetch()}>Retry</Button>
+          </div>
+        </div>
+      </>
+    )
   }
 
   return (
@@ -87,11 +138,13 @@ export default function SocialAccountsPage() {
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-foreground">{platform.name}</span>
-                        <Badge variant={account.isActive ? 'success' : 'muted'} dot>
-                          {account.isActive ? 'Active' : 'Inactive'}
+                        <Badge variant={account.is_active ? 'success' : 'muted'} dot>
+                          {account.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                       </div>
-                      <p className="text-sm text-muted">{account.accountHandle}</p>
+                      <p className="text-sm text-muted">
+                        {account.account_name || account.account_handle}
+                      </p>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -101,10 +154,15 @@ export default function SocialAccountsPage() {
                       <Button 
                         variant="ghost" 
                         size="sm"
-                        onClick={() => handleDisconnect(account.id)}
+                        onClick={() => handleDisconnect(account.platform)}
+                        disabled={disconnecting === account.platform}
                         className="text-error hover:text-error"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        {disconnecting === account.platform ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
                       </Button>
                     </div>
                   </Card>
@@ -154,8 +212,13 @@ export default function SocialAccountsPage() {
                       variant="secondary" 
                       size="sm"
                       onClick={() => handleConnect(platform.id)}
+                      disabled={connecting === platform.id}
                     >
-                      <Plus className="w-4 h-4" />
+                      {connecting === platform.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Plus className="w-4 h-4" />
+                      )}
                       Connect
                     </Button>
                   )}
